@@ -14,14 +14,22 @@ import { Button } from '@/shared/ui/Button'
 import { FullScreenSpinner } from '@/shared/ui/Spinner'
 import { toast } from '@/shared/ui/Toaster'
 
+import { ChatPanel } from '@/features/chat/ChatPanel'
+import { useIsDesktop } from '@/shared/useMediaQuery'
+import { ThemeToggle } from '@/shared/ui/ThemeToggle'
+
 import { DebugPanel } from './DebugPanel'
 import { EventFeed } from './EventFeed'
 import { Members } from './Members'
+import { MiniPlayer } from './MiniPlayer'
 import { Player } from './Player'
 import { RoomContext, useRoomSession } from './RoomContext'
+import { RoomSettingsButton } from './RoomSettings'
 import type { RoomSession } from './roomSession'
 import { useRoomStore } from './roomStore'
 import { closeRoom, openRoom, useSessionStore } from './sessionStore'
+import { useMediaSession } from './useMediaSession'
+import { usePlayerHotkeys } from './usePlayerHotkeys'
 
 export default function RoomPage() {
   const { slug = '' } = useParams()
@@ -121,22 +129,37 @@ function useToastsForOthers(): void {
   }, [])
 }
 
+type MobileTab = 'queue' | 'add' | 'people' | 'chat'
+
+const MOBILE_TABS: { id: MobileTab; label: string; icon: string }[] = [
+  { id: 'queue', label: 'Очередь', icon: '☰' },
+  { id: 'add', label: 'Добавить', icon: '+' },
+  { id: 'people', label: 'Люди', icon: '👥' },
+  { id: 'chat', label: 'Чат', icon: '💬' },
+]
+
 function RoomLayout() {
   const room = useRoomStore((s) => s.room)
   const status = useRoomStore((s) => s.status)
   const terminal = useRoomStore((s) => s.terminalCode)
   const audioUnlocked = useRoomStore((s) => s.audioUnlocked)
+  const desktop = useIsDesktop()
+  const [tab, setTab] = useState<MobileTab>('queue')
+  const [playerOpen, setPlayerOpen] = useState(false)
+  usePlayerHotkeys()
+  useMediaSession()
 
   if (terminal !== null) return <Terminal code={terminal} />
   if (!room) return <FullScreenSpinner />
+  const visible = (t: MobileTab): string => (tab === t ? 'block' : 'hidden')
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-7xl flex-col gap-4 p-3 sm:p-4">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+    <div className="mx-auto flex min-h-dvh max-w-7xl flex-col gap-3 p-3 pb-40 sm:p-4 lg:pb-4">
+      <header className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Link
             to="/"
-            className="focus-ring text-fg-muted hover:text-fg rounded"
+            className="focus-ring text-fg-muted hover:text-fg flex size-9 shrink-0 items-center justify-center rounded-full"
             aria-label="На главную"
           >
             ←
@@ -144,25 +167,130 @@ function RoomLayout() {
           <h1 className="truncate text-lg font-semibold">{room.name}</h1>
           <ConnectionDot status={status} />
         </div>
-        <InviteButton slug={room.slug} />
+        <div className="flex shrink-0 items-center gap-1">
+          <ThemeToggle />
+          <RoomSettingsButton />
+          <InviteButton slug={room.slug} />
+        </div>
       </header>
 
       <MeNotice />
       {!audioUnlocked && <UnlockBanner />}
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_360px]">
-        <div className="bg-surface-1 space-y-6 rounded-2xl p-4">
-          <Player />
+      <div className="grid flex-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
+        <aside
+          className={`bg-surface-1 space-y-6 rounded-2xl p-4 lg:block ${visible('people')}`}
+          aria-label="Плеер и участники"
+        >
+          {desktop && <Player />}
           <Members />
-        </div>
-        <div className="bg-surface-1 min-h-0 space-y-6 rounded-2xl p-4">
+        </aside>
+        <main
+          className={`bg-surface-1 min-h-0 space-y-6 rounded-2xl p-4 lg:block ${visible('queue')}`}
+        >
           <QueuePanel />
-          <EventFeed />
-        </div>
-        <div className="bg-surface-1 min-h-0 rounded-2xl p-4">
+          {desktop ? <FeedAndChat /> : <EventFeed />}
+        </main>
+        <section
+          aria-label="Добавить треки"
+          className={`bg-surface-1 min-h-0 rounded-2xl p-4 lg:block ${visible('add')}`}
+        >
           <AddPanel />
-        </div>
+        </section>
+        {!desktop && (
+          <section aria-label="Чат" className={`bg-surface-1 rounded-2xl p-4 ${visible('chat')}`}>
+            <ChatPanel />
+          </section>
+        )}
       </div>
+
+      {!desktop && (
+        <div className="fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)]">
+          <MiniPlayer
+            onExpand={() => {
+              setPlayerOpen(true)
+            }}
+          />
+          <nav
+            aria-label="Разделы комнаты"
+            className="bg-surface-1 border-border grid grid-cols-4 border-t"
+          >
+            {MOBILE_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                aria-current={tab === t.id ? 'page' : undefined}
+                onClick={() => {
+                  setTab(t.id)
+                }}
+                className={`focus-ring flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs ${
+                  tab === t.id ? 'text-accent' : 'text-fg-muted'
+                }`}
+              >
+                <span aria-hidden="true" className="text-lg leading-none">
+                  {t.icon}
+                </span>
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      )}
+      {!desktop && playerOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Плеер"
+          className="bg-surface-0 animate-sheet-in fixed inset-0 z-40 overflow-y-auto p-5 pt-[max(1.25rem,env(safe-area-inset-top))]"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setPlayerOpen(false)
+            }}
+            className="focus-ring text-fg-muted mx-auto mb-4 block rounded-full px-4 py-1"
+            aria-label="Свернуть плеер"
+          >
+            ⌄
+          </button>
+          <div className="mx-auto max-w-md">
+            <Player />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FeedAndChat() {
+  const [view, setView] = useState<'feed' | 'chat'>('feed')
+  const unread = useRoomStore((s) => s.chat.length)
+  return (
+    <div className="space-y-3">
+      <div role="tablist" aria-label="Лента и чат" className="flex gap-4 text-sm">
+        {(
+          [
+            ['feed', 'Лента'],
+            ['chat', `Чат${unread ? ` · ${String(unread)}` : ''}`],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => {
+              setView(id)
+            }}
+            className={`focus-ring rounded pb-1 font-semibold ${
+              view === id ? 'text-fg border-accent border-b-2' : 'text-fg-muted'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'feed' ? <EventFeed /> : <ChatPanel />}
     </div>
   )
 }

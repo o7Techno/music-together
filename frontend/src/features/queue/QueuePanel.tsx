@@ -106,7 +106,7 @@ export function QueuePanel() {
   return (
     <section aria-label="Очередь" className="flex min-h-0 flex-col gap-3">
       <div className="flex items-center gap-2">
-        <h3 className="text-fg-muted text-sm font-semibold">
+        <h2 className="text-fg-muted text-sm font-semibold">
           {showHistory ? 'История' : 'Далее'}
           {!showHistory && upcoming.length > 0 && (
             <span className="text-fg-subtle font-normal">
@@ -115,7 +115,7 @@ export function QueuePanel() {
               {formatTime(totalMs)}
             </span>
           )}
-        </h3>
+        </h2>
         <div className="ml-auto flex items-center">
           {!showHistory && upcoming.length > 1 && (
             <IconButton

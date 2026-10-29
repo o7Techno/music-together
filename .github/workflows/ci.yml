@@ -101,7 +101,7 @@ jobs:
         working-directory: backend
       - run: npm ci
         working-directory: frontend
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
       - name: Protocol types are up to date
         run: |

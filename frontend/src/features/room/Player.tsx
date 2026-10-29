@@ -16,6 +16,8 @@ import {
 
 import { useRoomSession } from './RoomContext'
 import { useRoomStore } from './roomStore'
+import { usePlaybackActions } from './usePlaybackActions'
+import { ReactionBurst } from './ReactionBurst'
 import { useCommand } from './useCommand'
 
 const NEXT_REPEAT: Record<RepeatMode, RepeatMode> = { off: 'queue', queue: 'track', track: 'off' }
@@ -48,35 +50,6 @@ function usePosition(): number {
   return pos
 }
 
-export function usePlaybackActions() {
-  const send = useCommand()
-  return {
-    playPause: () => {
-      const s = useRoomStore.getState().playback
-      void send({ type: s?.status === 'paused' ? 'cmd.play' : 'cmd.pause' })
-    },
-    next: () => {
-      void send({
-        type: 'cmd.next',
-        expectedQueueItemId: useRoomStore.getState().playback?.queueItemId ?? null,
-      })
-    },
-    prev: () => {
-      void send({
-        type: 'cmd.prev',
-        expectedQueueItemId: useRoomStore.getState().playback?.queueItemId ?? null,
-      })
-    },
-    seek: (positionMs: number) => {
-      void send({
-        type: 'cmd.seek',
-        positionMs: Math.max(0, Math.round(positionMs)),
-        expectedQueueItemId: useRoomStore.getState().playback?.queueItemId ?? null,
-      })
-    },
-  }
-}
-
 export function Player() {
   const playback = useRoomStore((s) => s.playback)
   const current = useRoomStore((s) => s.queue?.current ?? null)
@@ -93,7 +66,8 @@ export function Player() {
 
   return (
     <section aria-label="Плеер" className="flex flex-col gap-4">
-      <div className="flex items-center gap-4 lg:flex-col lg:items-stretch">
+      <div className="relative flex items-center gap-4 lg:flex-col lg:items-stretch">
+        <ReactionBurst />
         <Cover
           url={track?.coverUrl}
           size="lg"

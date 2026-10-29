@@ -6,11 +6,11 @@ import secrets
 
 from fastapi import APIRouter, Request, Response
 
-from app.api.deps import Ctx, CurrentUser, Db, set_session_cookie
-from app.api.schemas import AuthConfig, DevLoginRequest, Me
+from app.api.deps import Ctx, CurrentUser, Db, current_user, set_session_cookie
+from app.api.schemas import AuthConfig, DevLoginRequest, Me, SessionInfo
 from app.auth.sessions import COOKIE_NAME, create_session, delete_session
 from app.core.config import MusicProviderKind
-from app.core.errors import ForbiddenError
+from app.core.errors import ForbiddenError, UnauthorizedError
 from app.db.models import User
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -47,6 +47,16 @@ async def dev_login(body: DevLoginRequest, response: Response, ctx: Ctx, db: Db)
 @router.get("/me")
 async def me(user: CurrentUser) -> Me:
     return Me.of(user)
+
+
+@router.get("/session")
+async def session(request: Request, response: Response, ctx: Ctx, db: Db) -> SessionInfo:
+    """Кто вошёл — без 401 для анонимов (главная страница не шумит ошибками в консоли)."""
+    try:
+        user = await current_user(request, response, ctx, db)
+    except UnauthorizedError:
+        return SessionInfo(me=None)
+    return SessionInfo(me=Me.of(user))
 
 
 @router.post("/logout", status_code=204)

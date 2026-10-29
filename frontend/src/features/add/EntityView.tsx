@@ -50,7 +50,7 @@ export function EntityView({ entity }: { entity: EntityRef }) {
         <Cover url={list?.coverUrl} size="md" className="size-14" alt={entity.title} />
         <div className="min-w-0">
           <p className="text-fg-subtle text-xs">{LABEL[entity.type]}</p>
-          <h3 className="truncate font-semibold">{list?.title ?? entity.title}</h3>
+          <h2 className="truncate font-semibold">{list?.title ?? entity.title}</h2>
           {list?.subtitle && <p className="text-fg-muted truncate text-sm">{list.subtitle}</p>}
         </div>
       </div>
@@ -62,7 +62,7 @@ export function EntityView({ entity }: { entity: EntityRef }) {
       )}
       {list && list.albums.length > 0 && (
         <section className="space-y-2">
-          <h4 className="text-fg-muted text-sm font-semibold">Альбомы</h4>
+          <h3 className="text-fg-muted text-sm font-semibold">Альбомы</h3>
           <ul className="flex scrollbar-thin gap-3 overflow-x-auto pb-1">
             {list.albums.map((a) => (
               <li key={a.id} className="w-24 shrink-0">
@@ -85,7 +85,7 @@ export function EntityView({ entity }: { entity: EntityRef }) {
               </li>
             ))}
           </ul>
-          <h4 className="text-fg-muted text-sm font-semibold">Популярные треки</h4>
+          <h3 className="text-fg-muted text-sm font-semibold">Популярные треки</h3>
         </section>
       )}
       {list && (

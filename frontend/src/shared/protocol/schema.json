@@ -182,6 +182,9 @@
     "ServerMessage": {
       "$ref": "#/$defs/ServerMessage"
     },
+    "SessionInfo": {
+      "$ref": "#/$defs/SessionInfo"
+    },
     "SlugResponse": {
       "$ref": "#/$defs/SlugResponse"
     },
@@ -2116,6 +2119,26 @@
         }
       ],
       "title": "ServerMessage"
+    },
+    "SessionInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "me": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Me"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "me"
+      ],
+      "type": "object",
+      "title": "SessionInfo"
     },
     "SlugResponse": {
       "additionalProperties": false,

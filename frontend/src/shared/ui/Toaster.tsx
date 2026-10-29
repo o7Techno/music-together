@@ -57,7 +57,7 @@ function ToastItem({ t }: { t: Toast }) {
   return (
     <div
       role={t.kind === 'error' ? 'alert' : 'status'}
-      className={`bg-surface-2/95 pointer-events-auto flex max-w-sm items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${tone}`}
+      className={`bg-surface-2/95 animate-toast-in pointer-events-auto flex max-w-sm items-center gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${tone}`}
     >
       <span className="flex-1">{t.text}</span>
       {t.action && (

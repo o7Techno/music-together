@@ -11,6 +11,7 @@ import type {
   RoomDetails,
   RoomSummary,
   SearchResult,
+  SessionInfo,
   SlugResponse,
   StreamInfo,
   TrackList,
@@ -63,6 +64,7 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
 export const api = {
   authConfig: () => request<AuthConfig>('GET', '/api/auth/config'),
   me: () => request<Me>('GET', '/api/auth/me'),
+  session: () => request<SessionInfo>('GET', '/api/auth/session'),
   devLogin: (name: string) => request<Me>('POST', '/api/auth/dev-login', { name }),
   logout: () => request<undefined>('POST', '/api/auth/logout'),
   deviceStart: () => request<DeviceStartResponse>('POST', '/api/auth/device/start'),

@@ -7,7 +7,7 @@ export function EventFeed() {
   const recent = events.slice(-30).reverse()
   return (
     <section aria-label="Лента событий" className="space-y-2">
-      <h3 className="text-fg-muted text-sm font-semibold">Лента</h3>
+      <h2 className="text-fg-muted text-sm font-semibold">Лента</h2>
       {recent.length === 0 && <p className="text-fg-subtle text-sm">Пока тихо.</p>}
       <ol className="space-y-1 text-sm" data-testid="events">
         {recent.map((e) => (

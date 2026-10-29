@@ -13,7 +13,7 @@
   --c-border: #2c2c35;
   --c-fg: #f2f2f5;
   --c-fg-muted: #a1a1ad;
-  --c-fg-subtle: #6e6e7a;
+  --c-fg-subtle: #8c8c98;
   --c-accent: #ffcc33;
   --c-accent-strong: #ffd95c;
   --c-ok: #3ddc84;
@@ -31,7 +31,7 @@
   --c-border: #dedee5;
   --c-fg: #15151a;
   --c-fg-muted: #555561;
-  --c-fg-subtle: #85858f;
+  --c-fg-subtle: #686872;
   --c-accent: #e6a800;
   --c-accent-strong: #cc9600;
   --c-ok: #1a9e55;
@@ -80,4 +80,53 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    transform: translateY(-140px) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@utility animate-float-up {
+  animation: float-up 2.4s ease-out forwards;
+}
+
+@utility animate-sheet-in {
+  animation: sheet-in 0.22s ease-out;
+}
+
+@utility animate-toast-in {
+  animation: toast-in 0.18s ease-out;
 }

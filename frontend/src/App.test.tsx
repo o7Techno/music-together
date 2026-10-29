@@ -10,7 +10,7 @@ describe('App', () => {
         Promise.resolve(
           url.includes('/api/auth/config')
             ? Response.json({ devLogin: true, yandexLogin: false })
-            : Response.json({ code: 'unauthorized', message: 'Нужно войти.' }, { status: 401 }),
+            : Response.json({ me: null }),
         ),
       ),
     )

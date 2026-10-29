@@ -1,18 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { ApiError, api } from '@/shared/api'
+import { api } from '@/shared/api'
 
 export function useMe() {
   return useQuery({
     queryKey: ['me'],
-    queryFn: async () => {
-      try {
-        return await api.me()
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 401) return null
-        throw err
-      }
-    },
+    queryFn: async () => (await api.session()).me,
     staleTime: 60_000,
   })
 }

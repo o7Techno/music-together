@@ -33,6 +33,10 @@ class Me(ApiModel):
         )
 
 
+class SessionInfo(ApiModel):
+    me: Me | None
+
+
 class AuthConfig(ApiModel):
     dev_login: bool
     yandex_login: bool

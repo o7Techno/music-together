@@ -7,6 +7,7 @@ import { plural } from '@/shared/format'
 import type { Me } from '@/shared/protocol/generated'
 import { Button } from '@/shared/ui/Button'
 import { FullScreenSpinner } from '@/shared/ui/Spinner'
+import { ThemeToggle } from '@/shared/ui/ThemeToggle'
 
 import { AccountNotice } from './AccountNotice'
 import { LoginCard } from './LoginCard'
@@ -22,7 +23,10 @@ export function HomePage() {
           <h1 className="text-3xl font-bold tracking-tight">Слушаем вместе</h1>
           <p className="text-fg-muted">Яндекс Музыка с друзьями — синхронно, секунда в секунду</p>
         </div>
-        {me.data && <UserBadge me={me.data} />}
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          {me.data && <UserBadge me={me.data} />}
+        </div>
       </header>
       {me.data && <AccountNotice me={me.data} />}
       {me.data ? <Rooms me={me.data} /> : <LoginCard />}

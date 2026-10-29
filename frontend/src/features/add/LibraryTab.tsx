@@ -43,7 +43,7 @@ export function LibraryTab() {
       )}
 
       <section className="space-y-1">
-        <h4 className="text-fg-muted px-2 text-sm font-semibold">Плейлисты</h4>
+        <h3 className="text-fg-muted px-2 text-sm font-semibold">Плейлисты</h3>
         {playlists.isPending && <SkeletonRows count={3} />}
         {playlists.data?.length === 0 && (
           <p className="text-fg-subtle px-2 text-sm">Своих плейлистов пока нет.</p>
@@ -69,7 +69,7 @@ export function LibraryTab() {
       </section>
 
       <section className="space-y-1">
-        <h4 className="text-fg-muted px-2 text-sm font-semibold">Альбомы в коллекции</h4>
+        <h3 className="text-fg-muted px-2 text-sm font-semibold">Альбомы в коллекции</h3>
         {albums.isPending && <SkeletonRows count={3} />}
         {albums.data?.length === 0 && (
           <p className="text-fg-subtle px-2 text-sm">Сохранённых альбомов нет.</p>

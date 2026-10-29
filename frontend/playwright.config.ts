@@ -25,7 +25,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /mobile\.spec/ },
+    { name: 'mobile-chrome', use: { ...devices['Pixel 7'] }, testMatch: /mobile\.spec/ },
+    { name: 'mobile-webkit', use: { ...devices['iPhone 13'] }, testMatch: /mobile\.spec/ },
+  ],
   webServer: [
     {
       command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${String(API_PORT)}`,

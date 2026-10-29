@@ -161,6 +161,7 @@ export interface Protocol {
   RoomSummary?: RoomSummary
   SearchResult?: SearchResult
   ServerMessage?: ServerMessage
+  SessionInfo?: SessionInfo
   SlugResponse?: SlugResponse
   Snapshot?: Snapshot
   StreamInfo?: StreamInfo
@@ -744,6 +745,13 @@ export interface Snapshot {
   stats: SyncStats
   events: RoomEvent[]
   chat: ChatMessage[]
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "SessionInfo".
+ */
+export interface SessionInfo {
+  me: Me | null
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema

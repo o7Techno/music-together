@@ -1,4 +1,8 @@
+import { ApiError, api } from '@/shared/api'
 import type { MemberView } from '@/shared/protocol/generated'
+import { IconButton } from '@/shared/ui/Button'
+import { CloseIcon } from '@/shared/ui/icons'
+import { toast } from '@/shared/ui/Toaster'
 
 import { useRoomStore } from './roomStore'
 
@@ -45,9 +49,21 @@ export function Avatar({
 
 export function Members() {
   const members = useRoomStore((s) => s.members)
+  const room = useRoomStore((s) => s.room)
+  const selfId = useRoomStore((s) => s.selfUserId)
+  const isOwner = room !== null && room.ownerId === selfId
+  const kick = async (userId: string, name: string): Promise<void> => {
+    if (!room || !window.confirm(`Убрать ${name} из комнаты? Вернуться по ссылке не получится.`))
+      return
+    try {
+      await api.kick(room.slug, userId)
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : 'Не получилось.')
+    }
+  }
   return (
     <section aria-label="Участники" className="space-y-2">
-      <h3 className="text-fg-muted text-sm font-semibold">Слушают · {members.length}</h3>
+      <h2 className="text-fg-muted text-sm font-semibold">Слушают · {members.length}</h2>
       <ul className="space-y-1.5" data-testid="members">
         {members.map((m) => {
           const st = statusOf(m)
@@ -66,6 +82,15 @@ export function Members() {
               <span className="text-fg-subtle shrink-0 text-xs" title={st.label}>
                 {st.label}
               </span>
+              {isOwner && m.userId !== selfId && (
+                <IconButton
+                  size="sm"
+                  label={`Убрать ${m.name} из комнаты`}
+                  onClick={() => void kick(m.userId, m.name)}
+                >
+                  <CloseIcon size={14} />
+                </IconButton>
+              )}
             </li>
           )
         })}
