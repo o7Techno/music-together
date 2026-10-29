@@ -86,7 +86,7 @@ export function ChatPanel() {
           maxLength={500}
           placeholder="Сообщение"
           aria-label="Сообщение в чат"
-          className="focus-ring border-border bg-surface-2 h-10 min-w-0 flex-1 rounded-full border px-4"
+          className="focus-ring border-border bg-surface-2 h-10 w-full min-w-0 flex-1 rounded-full border px-4"
         />
         <Button type="submit" size="md" disabled={!text.trim()}>
           Отправить

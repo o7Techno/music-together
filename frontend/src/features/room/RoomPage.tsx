@@ -177,7 +177,7 @@ function RoomLayout() {
       <MeNotice />
       {!audioUnlocked && <UnlockBanner />}
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
+      <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
         <aside
           className={`bg-surface-1 space-y-6 rounded-2xl p-4 lg:block ${visible('people')}`}
           aria-label="Плеер и участники"
