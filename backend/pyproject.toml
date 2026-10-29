@@ -1,0 +1,70 @@
+[project]
+name = "music-together-backend"
+version = "0.1.0"
+description = "«Слушаем вместе» — бэкенд сервиса совместного прослушивания"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "cryptography>=43",
+    "structlog>=24.4",
+    "httpx>=0.28",
+    "yandex-music[async,crypto]>=3.2.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "aiosqlite>=0.20",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PT", "RET", "PL", "TRY",
+]
+ignore = [
+    "PLR2004", # magic values in comparisons are fine in this codebase (tested constants)
+    "TRY003",  # long messages in exceptions are ok
+    "PLR0913", # explicit args over config objects in a few domain functions
+    "RUF001", "RUF002", "RUF003", # cyrillic text in strings/docstrings/comments is intended
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR0915", "S105", "S106"]
+"../scripts/**" = ["T201", "S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unreachable = true
+files = ["app", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["yandex_music", "yandex_music.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+filterwarnings = [
+    # Starlette рекомендует сторонний пакет вместо httpx для TestClient; httpx нас устраивает.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
