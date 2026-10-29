@@ -8,6 +8,8 @@ import { defineConfig, devices } from '@playwright/test'
 const API_PORT = Number(process.env.E2E_API_PORT ?? 8011)
 const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5181)
 const origin = `http://localhost:${String(WEB_PORT)}`
+// Флаг только для Chromium: WebKit на Linux падает на незнакомых аргументах.
+const CHROMIUM_AUTOPLAY = '--autoplay-policy=no-user-gesture-required'
 const dbFile = join(tmpdir(), `music-together-e2e-${String(Date.now())}.db`)
   .split(sep)
   .join('/')
@@ -23,11 +25,18 @@ export default defineConfig({
   use: {
     baseURL: origin,
     trace: 'retain-on-failure',
-    launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] }, testIgnore: /mobile\.spec/ },
-    { name: 'mobile-chrome', use: { ...devices['Pixel 7'] }, testMatch: /mobile\.spec/ },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], launchOptions: { args: [CHROMIUM_AUTOPLAY] } },
+      testIgnore: /mobile\.spec/,
+    },
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'], launchOptions: { args: [CHROMIUM_AUTOPLAY] } },
+      testMatch: /mobile\.spec/,
+    },
     { name: 'mobile-webkit', use: { ...devices['iPhone 13'] }, testMatch: /mobile\.spec/ },
   ],
   webServer: [
