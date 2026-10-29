@@ -282,10 +282,12 @@ class Room:
     def _user_online(self, user_id: str) -> bool:
         return any(c.user.id == user_id for c in self.clients.values())
 
-    async def join(self, conn_id: str, user: RoomUser) -> Snapshot:
+    async def join(self, conn_id: str, user: RoomUser) -> None:
+        """Подключить соединение. Первым сообщением ему уходит полный снапшот."""
         async with self.lock:
             first_conn = not self._user_online(user.id)
             self.clients[conn_id] = ClientConn(conn_id=conn_id, user=user)
+            self._out.send(conn_id, self.snapshot_for(conn_id))
             pending_leave = self._leave_timers.pop(user.id, None)
             if pending_leave is not None:
                 pending_leave.cancel()
@@ -293,7 +295,6 @@ class Room:
                 self._event(EventKind.JOINED, user)
             self._recently_online.add(user.id)
             self._publish_members()
-            return self.snapshot_for(conn_id)
 
     async def leave(self, conn_id: str) -> None:
         async with self.lock:
@@ -361,12 +362,13 @@ class Room:
             if self._stats_dirty and self.clients:
                 self._publish_members()
 
-    def kick(self, user_id: str) -> RoomUser | None:
-        """Закрыть все соединения пользователя. Вызывается под `lock` менеджером."""
+    def kick(self, user_id: str, by: RoomUser) -> None:
+        """Закрыть все соединения пользователя. Вызывать под `lock`."""
         kicked = [c for c in self.clients.values() if c.user.id == user_id]
         for client in kicked:
             self._out.close(client.conn_id, CloseReason.KICKED)
-        return kicked[0].user if kicked else None
+        if kicked:
+            self._event(EventKind.KICKED, by, title=kicked[0].user.name)
 
     def close_all(self, reason: CloseReason) -> None:
         self.closed = True
@@ -383,6 +385,11 @@ class Room:
         self._broadcast(RoomInfoMessage(room=self.info))
         self._event(EventKind.RENAMED, by, title=name)
         self._changed()
+
+    def set_slug(self, slug: str) -> None:
+        """Ссылку перевыпустили: подключённые остаются, им уходит новая ссылка."""
+        self.slug = slug
+        self._broadcast(RoomInfoMessage(room=self.info))
 
     # ── Воспроизведение: внутренние переходы ────────────────────────────────────
 

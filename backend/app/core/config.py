@@ -60,6 +60,15 @@ class Settings(BaseSettings):
     def allowed_origins(self) -> set[str]:
         return {self.public_origin, *self.extra_allowed_origins}
 
+    @property
+    def cookie_secure(self) -> bool:
+        return self.is_prod or self.public_origin.startswith("https://")
+
+    @property
+    def allow_dev_login(self) -> bool:
+        """Вход без Яндекса: в разработке и на FakeProvider (демо/e2e), но не в проде с Яндексом."""
+        return self.music_provider is MusicProviderKind.FAKE or not self.is_prod
+
 
 @lru_cache
 def get_settings() -> Settings:

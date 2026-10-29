@@ -410,5 +410,5 @@ async def test_kick_closes_all_user_connections(env: Env) -> None:
     await env.join("c1", ANNA)
     await env.join("c2", PETYA)
     await env.join("c3", PETYA)
-    env.room.kick(PETYA.id)
+    env.room.kick(PETYA.id, ANNA)
     assert set(env.out.closed) == {"c2", "c3"}

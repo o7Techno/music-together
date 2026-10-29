@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+
+from app.api.deps import Ctx
 
 router = APIRouter(tags=["health"])
 
@@ -13,7 +16,9 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@router.get("/ready")
-async def ready() -> dict[str, str]:
-    """Готов принимать трафик. Проверка БД появится вместе с БД в фазе 1."""
+@router.get("/ready", response_model=None)
+async def ready(ctx: Ctx) -> dict[str, str] | JSONResponse:
+    """Готов принимать трафик: БД доступна."""
+    if not await ctx.db.ping():
+        return JSONResponse({"status": "db_unavailable"}, status_code=503)
     return {"status": "ok"}
