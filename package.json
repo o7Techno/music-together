@@ -20,7 +20,8 @@
     "test:frontend": "npm --prefix frontend test",
     "e2e": "npm --prefix frontend run e2e",
     "format": "cd backend && uv run ruff format . && uv run ruff check --fix . && cd .. && npm --prefix frontend run format",
-    "check": "npm run lint && npm run typecheck && npm run test"
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "gen:types": "cd backend && uv run python -m app.ws.schema > ../frontend/src/shared/protocol/schema.json && cd .. && npm --prefix frontend run gen:types"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"

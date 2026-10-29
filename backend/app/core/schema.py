@@ -12,4 +12,5 @@ class ApiModel(BaseModel):
         populate_by_name=True,
         serialize_by_alias=True,
         extra="forbid",
+        json_schema_serialization_defaults_required=True,
     )

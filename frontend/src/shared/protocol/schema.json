@@ -1,0 +1,2321 @@
+{
+  "title": "Protocol",
+  "type": "object",
+  "properties": {
+    "Ack": {
+      "$ref": "#/$defs/Ack"
+    },
+    "AddPosition": {
+      "$ref": "#/$defs/AddPosition"
+    },
+    "AlbumSummary": {
+      "$ref": "#/$defs/AlbumSummary"
+    },
+    "ArtistRef": {
+      "$ref": "#/$defs/ArtistRef"
+    },
+    "ArtistSummary": {
+      "$ref": "#/$defs/ArtistSummary"
+    },
+    "AuthConfig": {
+      "$ref": "#/$defs/AuthConfig"
+    },
+    "BestResult": {
+      "$ref": "#/$defs/BestResult"
+    },
+    "ChatMessage": {
+      "$ref": "#/$defs/ChatMessage"
+    },
+    "ChatMessageEnvelope": {
+      "$ref": "#/$defs/ChatMessageEnvelope"
+    },
+    "ChatSend": {
+      "$ref": "#/$defs/ChatSend"
+    },
+    "ClientMessage": {
+      "$ref": "#/$defs/ClientMessage"
+    },
+    "ClientStatus": {
+      "$ref": "#/$defs/ClientStatus"
+    },
+    "CloseReason": {
+      "$ref": "#/$defs/CloseReason"
+    },
+    "Closed": {
+      "$ref": "#/$defs/Closed"
+    },
+    "CmdNext": {
+      "$ref": "#/$defs/CmdNext"
+    },
+    "CmdPause": {
+      "$ref": "#/$defs/CmdPause"
+    },
+    "CmdPlay": {
+      "$ref": "#/$defs/CmdPlay"
+    },
+    "CmdPlayItem": {
+      "$ref": "#/$defs/CmdPlayItem"
+    },
+    "CmdPrev": {
+      "$ref": "#/$defs/CmdPrev"
+    },
+    "CmdSeek": {
+      "$ref": "#/$defs/CmdSeek"
+    },
+    "CmdSetRepeat": {
+      "$ref": "#/$defs/CmdSetRepeat"
+    },
+    "DriftReport": {
+      "$ref": "#/$defs/DriftReport"
+    },
+    "EntityKind": {
+      "$ref": "#/$defs/EntityKind"
+    },
+    "ErrorMessage": {
+      "$ref": "#/$defs/ErrorMessage"
+    },
+    "EventKind": {
+      "$ref": "#/$defs/EventKind"
+    },
+    "EventMessage": {
+      "$ref": "#/$defs/EventMessage"
+    },
+    "Me": {
+      "$ref": "#/$defs/Me"
+    },
+    "MemberView": {
+      "$ref": "#/$defs/MemberView"
+    },
+    "MembersMessage": {
+      "$ref": "#/$defs/MembersMessage"
+    },
+    "Ping": {
+      "$ref": "#/$defs/Ping"
+    },
+    "PlaybackMessage": {
+      "$ref": "#/$defs/PlaybackMessage"
+    },
+    "PlaybackState": {
+      "$ref": "#/$defs/PlaybackState"
+    },
+    "PlaybackStatus": {
+      "$ref": "#/$defs/PlaybackStatus"
+    },
+    "PlaylistSummary": {
+      "$ref": "#/$defs/PlaylistSummary"
+    },
+    "Pong": {
+      "$ref": "#/$defs/Pong"
+    },
+    "QueueAdd": {
+      "$ref": "#/$defs/QueueAdd"
+    },
+    "QueueClear": {
+      "$ref": "#/$defs/QueueClear"
+    },
+    "QueueItem": {
+      "$ref": "#/$defs/QueueItem"
+    },
+    "QueueMessage": {
+      "$ref": "#/$defs/QueueMessage"
+    },
+    "QueueMove": {
+      "$ref": "#/$defs/QueueMove"
+    },
+    "QueueRemove": {
+      "$ref": "#/$defs/QueueRemove"
+    },
+    "QueueShuffle": {
+      "$ref": "#/$defs/QueueShuffle"
+    },
+    "QueueSource-Input": {
+      "$ref": "#/$defs/QueueSource-Input"
+    },
+    "QueueSource-Output": {
+      "$ref": "#/$defs/QueueSource-Output"
+    },
+    "QueueState": {
+      "$ref": "#/$defs/QueueState"
+    },
+    "ReactionSend": {
+      "$ref": "#/$defs/ReactionSend"
+    },
+    "Ready": {
+      "$ref": "#/$defs/Ready"
+    },
+    "RepeatMode": {
+      "$ref": "#/$defs/RepeatMode"
+    },
+    "ResolvedEntity": {
+      "$ref": "#/$defs/ResolvedEntity"
+    },
+    "RoomDetails": {
+      "$ref": "#/$defs/RoomDetails"
+    },
+    "RoomEvent": {
+      "$ref": "#/$defs/RoomEvent"
+    },
+    "RoomInfo": {
+      "$ref": "#/$defs/RoomInfo"
+    },
+    "RoomInfoMessage": {
+      "$ref": "#/$defs/RoomInfoMessage"
+    },
+    "RoomSummary": {
+      "$ref": "#/$defs/RoomSummary"
+    },
+    "SearchResult": {
+      "$ref": "#/$defs/SearchResult"
+    },
+    "ServerMessage": {
+      "$ref": "#/$defs/ServerMessage"
+    },
+    "SlugResponse": {
+      "$ref": "#/$defs/SlugResponse"
+    },
+    "Snapshot": {
+      "$ref": "#/$defs/Snapshot"
+    },
+    "StreamInfo": {
+      "$ref": "#/$defs/StreamInfo"
+    },
+    "StreamMode": {
+      "$ref": "#/$defs/StreamMode"
+    },
+    "SyncState": {
+      "$ref": "#/$defs/SyncState"
+    },
+    "SyncStats": {
+      "$ref": "#/$defs/SyncStats"
+    },
+    "Track": {
+      "$ref": "#/$defs/Track"
+    },
+    "TrackList": {
+      "$ref": "#/$defs/TrackList"
+    }
+  },
+  "$defs": {
+    "Ack": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ack",
+          "default": "ack",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "Ack"
+    },
+    "AddPosition": {
+      "enum": [
+        "end",
+        "next",
+        "now"
+      ],
+      "type": "string",
+      "title": "AddPosition"
+    },
+    "AlbumSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "artists": {
+          "items": {
+            "$ref": "#/$defs/ArtistRef"
+          },
+          "type": "array"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trackCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "artists",
+        "year",
+        "trackCount",
+        "coverUrl"
+      ],
+      "type": "object",
+      "title": "AlbumSummary"
+    },
+    "ArtistRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object",
+      "title": "ArtistRef"
+    },
+    "ArtistSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "coverUrl"
+      ],
+      "type": "object",
+      "title": "ArtistSummary"
+    },
+    "AuthConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "devLogin": {
+          "type": "boolean"
+        },
+        "yandexLogin": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "devLogin",
+        "yandexLogin"
+      ],
+      "type": "object",
+      "title": "AuthConfig"
+    },
+    "BestResult": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/EntityKind"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Track"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "album": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AlbumSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "artist": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtistSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "playlist": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlaylistSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "track",
+        "album",
+        "artist",
+        "playlist"
+      ],
+      "type": "object",
+      "title": "BestResult"
+    },
+    "ChatMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "atMs": {
+          "type": "integer"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "userName": {
+          "type": "string"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "emoji": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trackId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "atMs",
+        "userId",
+        "userName",
+        "text",
+        "emoji",
+        "trackId"
+      ],
+      "type": "object",
+      "title": "ChatMessage"
+    },
+    "ChatMessageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "chat",
+          "default": "chat",
+          "type": "string"
+        },
+        "message": {
+          "$ref": "#/$defs/ChatMessage"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ],
+      "type": "object",
+      "title": "ChatMessageEnvelope"
+    },
+    "ChatSend": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "chat.send",
+          "default": "chat.send",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "text"
+      ],
+      "type": "object",
+      "title": "ChatSend"
+    },
+    "ClientMessage": {
+      "discriminator": {
+        "mapping": {
+          "chat.react": "#/$defs/ReactionSend",
+          "chat.send": "#/$defs/ChatSend",
+          "client_status": "#/$defs/ClientStatus",
+          "cmd.next": "#/$defs/CmdNext",
+          "cmd.pause": "#/$defs/CmdPause",
+          "cmd.play": "#/$defs/CmdPlay",
+          "cmd.play_item": "#/$defs/CmdPlayItem",
+          "cmd.prev": "#/$defs/CmdPrev",
+          "cmd.seek": "#/$defs/CmdSeek",
+          "cmd.set_repeat": "#/$defs/CmdSetRepeat",
+          "drift_report": "#/$defs/DriftReport",
+          "ping": "#/$defs/Ping",
+          "queue.add": "#/$defs/QueueAdd",
+          "queue.clear": "#/$defs/QueueClear",
+          "queue.move": "#/$defs/QueueMove",
+          "queue.remove": "#/$defs/QueueRemove",
+          "queue.shuffle": "#/$defs/QueueShuffle",
+          "ready": "#/$defs/Ready"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Ping"
+        },
+        {
+          "$ref": "#/$defs/Ready"
+        },
+        {
+          "$ref": "#/$defs/ClientStatus"
+        },
+        {
+          "$ref": "#/$defs/DriftReport"
+        },
+        {
+          "$ref": "#/$defs/CmdPlay"
+        },
+        {
+          "$ref": "#/$defs/CmdPause"
+        },
+        {
+          "$ref": "#/$defs/CmdSeek"
+        },
+        {
+          "$ref": "#/$defs/CmdNext"
+        },
+        {
+          "$ref": "#/$defs/CmdPrev"
+        },
+        {
+          "$ref": "#/$defs/CmdPlayItem"
+        },
+        {
+          "$ref": "#/$defs/CmdSetRepeat"
+        },
+        {
+          "$ref": "#/$defs/QueueAdd"
+        },
+        {
+          "$ref": "#/$defs/QueueRemove"
+        },
+        {
+          "$ref": "#/$defs/QueueMove"
+        },
+        {
+          "$ref": "#/$defs/QueueShuffle"
+        },
+        {
+          "$ref": "#/$defs/QueueClear"
+        },
+        {
+          "$ref": "#/$defs/ChatSend"
+        },
+        {
+          "$ref": "#/$defs/ReactionSend"
+        }
+      ],
+      "title": "ClientMessage"
+    },
+    "ClientStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "client_status",
+          "default": "client_status",
+          "type": "string"
+        },
+        "audioUnlocked": {
+          "type": "boolean"
+        },
+        "trackUnavailable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "sync": {
+          "$ref": "#/$defs/SyncState",
+          "default": "idle"
+        }
+      },
+      "required": [
+        "type",
+        "audioUnlocked"
+      ],
+      "type": "object",
+      "title": "ClientStatus"
+    },
+    "CloseReason": {
+      "enum": [
+        "deleted",
+        "kicked",
+        "restart",
+        "replaced"
+      ],
+      "type": "string",
+      "title": "CloseReason"
+    },
+    "Closed": {
+      "additionalProperties": false,
+      "description": "Сервер закрывает соединение: комната удалена, участника выгнали, сервер перезапускается.",
+      "properties": {
+        "type": {
+          "const": "closed",
+          "default": "closed",
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/CloseReason"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "type": "object",
+      "title": "Closed"
+    },
+    "CmdNext": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.next",
+          "default": "cmd.next",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "expectedQueueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "expectedQueueItemId"
+      ],
+      "type": "object",
+      "title": "CmdNext"
+    },
+    "CmdPause": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.pause",
+          "default": "cmd.pause",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "CmdPause"
+    },
+    "CmdPlay": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.play",
+          "default": "cmd.play",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "CmdPlay"
+    },
+    "CmdPlayItem": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.play_item",
+          "default": "cmd.play_item",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "queueItemId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "queueItemId"
+      ],
+      "type": "object",
+      "title": "CmdPlayItem"
+    },
+    "CmdPrev": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.prev",
+          "default": "cmd.prev",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "expectedQueueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "expectedQueueItemId"
+      ],
+      "type": "object",
+      "title": "CmdPrev"
+    },
+    "CmdSeek": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.seek",
+          "default": "cmd.seek",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "positionMs": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expectedQueueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "positionMs",
+        "expectedQueueItemId"
+      ],
+      "type": "object",
+      "title": "CmdSeek"
+    },
+    "CmdSetRepeat": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "cmd.set_repeat",
+          "default": "cmd.set_repeat",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/RepeatMode"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "mode"
+      ],
+      "type": "object",
+      "title": "CmdSetRepeat"
+    },
+    "DriftReport": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "drift_report",
+          "default": "drift_report",
+          "type": "string"
+        },
+        "driftMs": {
+          "type": "number"
+        },
+        "playbackRate": {
+          "default": 1.0,
+          "type": "number"
+        },
+        "offsetMs": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "rttMs": {
+          "default": 0.0,
+          "type": "number"
+        },
+        "outputLatencyMs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "driftMs"
+      ],
+      "type": "object",
+      "title": "DriftReport"
+    },
+    "EntityKind": {
+      "enum": [
+        "track",
+        "album",
+        "artist",
+        "playlist"
+      ],
+      "type": "string",
+      "title": "EntityKind"
+    },
+    "ErrorMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "error",
+          "default": "error",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "code",
+        "message"
+      ],
+      "type": "object",
+      "title": "ErrorMessage"
+    },
+    "EventKind": {
+      "enum": [
+        "joined",
+        "left",
+        "play",
+        "pause",
+        "seek",
+        "next",
+        "prev",
+        "play_item",
+        "queue_add",
+        "queue_remove",
+        "queue_move",
+        "queue_shuffle",
+        "queue_clear",
+        "repeat",
+        "renamed",
+        "kicked"
+      ],
+      "type": "string",
+      "title": "EventKind"
+    },
+    "EventMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "event",
+          "default": "event",
+          "type": "string"
+        },
+        "event": {
+          "$ref": "#/$defs/RoomEvent"
+        }
+      },
+      "required": [
+        "type",
+        "event"
+      ],
+      "type": "object",
+      "title": "EventMessage"
+    },
+    "Me": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "login": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hasPlus": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "login",
+        "displayName",
+        "avatarUrl",
+        "hasPlus",
+        "provider"
+      ],
+      "type": "object",
+      "title": "Me"
+    },
+    "MemberView": {
+      "additionalProperties": false,
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "online": {
+          "type": "boolean"
+        },
+        "connections": {
+          "type": "integer"
+        },
+        "audioUnlocked": {
+          "type": "boolean"
+        },
+        "trackUnavailable": {
+          "type": "boolean"
+        },
+        "sync": {
+          "$ref": "#/$defs/SyncState"
+        },
+        "driftMedianMs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "driftP95Ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "isOwner": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "avatarUrl",
+        "online",
+        "connections",
+        "audioUnlocked",
+        "trackUnavailable",
+        "sync",
+        "driftMedianMs",
+        "driftP95Ms",
+        "isOwner"
+      ],
+      "type": "object",
+      "title": "MemberView"
+    },
+    "MembersMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "members",
+          "default": "members",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/MemberView"
+          },
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/$defs/SyncStats"
+        }
+      },
+      "required": [
+        "type",
+        "members",
+        "stats"
+      ],
+      "type": "object",
+      "title": "MembersMessage"
+    },
+    "Ping": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "ping",
+          "default": "ping",
+          "type": "string"
+        },
+        "t0": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t0"
+      ],
+      "type": "object",
+      "title": "Ping"
+    },
+    "PlaybackMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "playback",
+          "default": "playback",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/PlaybackState"
+        }
+      },
+      "required": [
+        "type",
+        "state"
+      ],
+      "type": "object",
+      "title": "PlaybackMessage"
+    },
+    "PlaybackState": {
+      "additionalProperties": false,
+      "properties": {
+        "queueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trackId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/PlaybackStatus",
+          "default": "paused"
+        },
+        "positionMs": {
+          "default": 0,
+          "type": "integer"
+        },
+        "anchorServerMs": {
+          "default": 0,
+          "type": "integer"
+        },
+        "durationMs": {
+          "default": 0,
+          "type": "integer"
+        },
+        "version": {
+          "default": 0,
+          "type": "integer"
+        },
+        "updatedBy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "queueItemId",
+        "trackId",
+        "status",
+        "positionMs",
+        "anchorServerMs",
+        "durationMs",
+        "version",
+        "updatedBy"
+      ],
+      "type": "object",
+      "title": "PlaybackState"
+    },
+    "PlaybackStatus": {
+      "enum": [
+        "playing",
+        "paused",
+        "loading"
+      ],
+      "type": "string",
+      "title": "PlaybackStatus"
+    },
+    "PlaylistSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "ownerName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trackCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "ref",
+        "title",
+        "ownerName",
+        "trackCount",
+        "coverUrl"
+      ],
+      "type": "object",
+      "title": "PlaylistSummary"
+    },
+    "Pong": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "pong",
+          "default": "pong",
+          "type": "string"
+        },
+        "t0": {
+          "type": "number"
+        },
+        "serverTime": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "t0",
+        "serverTime"
+      ],
+      "type": "object",
+      "title": "Pong"
+    },
+    "QueueAdd": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue.add",
+          "default": "queue.add",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "trackIds": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "type": "array"
+        },
+        "position": {
+          "$ref": "#/$defs/AddPosition",
+          "default": "end"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueueSource-Input"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "trackIds"
+      ],
+      "type": "object",
+      "title": "QueueAdd"
+    },
+    "QueueClear": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue.clear",
+          "default": "queue.clear",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "QueueClear"
+    },
+    "QueueItem": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "track": {
+          "$ref": "#/$defs/Track"
+        },
+        "addedBy": {
+          "type": "string"
+        },
+        "addedAtMs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "track",
+        "addedBy",
+        "addedAtMs"
+      ],
+      "type": "object",
+      "title": "QueueItem"
+    },
+    "QueueMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue",
+          "default": "queue",
+          "type": "string"
+        },
+        "queue": {
+          "$ref": "#/$defs/QueueState"
+        }
+      },
+      "required": [
+        "type",
+        "queue"
+      ],
+      "type": "object",
+      "title": "QueueMessage"
+    },
+    "QueueMove": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue.move",
+          "default": "queue.move",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "toIndex": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId",
+        "toIndex"
+      ],
+      "type": "object",
+      "title": "QueueMove"
+    },
+    "QueueRemove": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue.remove",
+          "default": "queue.remove",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId"
+      ],
+      "type": "object",
+      "title": "QueueRemove"
+    },
+    "QueueShuffle": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "queue.shuffle",
+          "default": "queue.shuffle",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "QueueShuffle"
+    },
+    "QueueSource-Input": {
+      "additionalProperties": false,
+      "description": "Откуда добавлены треки — для события в ленте («37 треков из плейлиста X»).",
+      "properties": {
+        "kind": {
+          "enum": [
+            "album",
+            "playlist",
+            "artist",
+            "liked",
+            "search",
+            "link",
+            "history",
+            "undo"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object",
+      "title": "QueueSource-Input"
+    },
+    "QueueSource-Output": {
+      "additionalProperties": false,
+      "description": "Откуда добавлены треки — для события в ленте («37 треков из плейлиста X»).",
+      "properties": {
+        "kind": {
+          "enum": [
+            "album",
+            "playlist",
+            "artist",
+            "liked",
+            "search",
+            "link",
+            "history",
+            "undo"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "title"
+      ],
+      "type": "object",
+      "title": "QueueSource-Output"
+    },
+    "QueueState": {
+      "additionalProperties": false,
+      "description": "Сериализуемый снимок очереди: уходит клиентам и в БД.",
+      "properties": {
+        "version": {
+          "default": 0,
+          "type": "integer"
+        },
+        "current": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueueItem"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "upcoming": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QueueItem"
+          },
+          "type": "array"
+        },
+        "history": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QueueItem"
+          },
+          "type": "array"
+        },
+        "repeat": {
+          "$ref": "#/$defs/RepeatMode",
+          "default": "off"
+        }
+      },
+      "required": [
+        "version",
+        "current",
+        "upcoming",
+        "history",
+        "repeat"
+      ],
+      "type": "object",
+      "title": "QueueState"
+    },
+    "ReactionSend": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "chat.react",
+          "default": "chat.react",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "emoji": {
+          "maxLength": 16,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "emoji"
+      ],
+      "type": "object",
+      "title": "ReactionSend"
+    },
+    "Ready": {
+      "additionalProperties": false,
+      "description": "Трек загружен и готов к старту для состояния с этой версией.",
+      "properties": {
+        "type": {
+          "const": "ready",
+          "default": "ready",
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "version"
+      ],
+      "type": "object",
+      "title": "Ready"
+    },
+    "RepeatMode": {
+      "enum": [
+        "off",
+        "queue",
+        "track"
+      ],
+      "type": "string",
+      "title": "RepeatMode"
+    },
+    "ResolvedEntity": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/EntityKind"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "type": "object",
+      "title": "ResolvedEntity"
+    },
+    "RoomDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        },
+        "isOwner": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "ownerId",
+        "isOwner"
+      ],
+      "type": "object",
+      "title": "RoomDetails"
+    },
+    "RoomEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "atMs": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/EventKind"
+        },
+        "userId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "userName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "positionMs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RepeatMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QueueSource-Output"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "atMs",
+        "kind",
+        "userId",
+        "userName",
+        "count",
+        "title",
+        "positionMs",
+        "repeat",
+        "source"
+      ],
+      "type": "object",
+      "title": "RoomEvent"
+    },
+    "RoomInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ownerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "ownerId"
+      ],
+      "type": "object",
+      "title": "RoomInfo"
+    },
+    "RoomInfoMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "room",
+          "default": "room",
+          "type": "string"
+        },
+        "room": {
+          "$ref": "#/$defs/RoomInfo"
+        }
+      },
+      "required": [
+        "type",
+        "room"
+      ],
+      "type": "object",
+      "title": "RoomInfoMessage"
+    },
+    "RoomSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "isOwner": {
+          "type": "boolean"
+        },
+        "lastJoinedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "online": {
+          "default": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slug",
+        "name",
+        "isOwner",
+        "lastJoinedAt",
+        "online"
+      ],
+      "type": "object",
+      "title": "RoomSummary"
+    },
+    "SearchResult": {
+      "additionalProperties": false,
+      "properties": {
+        "best": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BestResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tracks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        },
+        "albums": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AlbumSummary"
+          },
+          "type": "array"
+        },
+        "artists": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ArtistSummary"
+          },
+          "type": "array"
+        },
+        "playlists": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PlaylistSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "best",
+        "tracks",
+        "albums",
+        "artists",
+        "playlists"
+      ],
+      "type": "object",
+      "title": "SearchResult"
+    },
+    "ServerMessage": {
+      "discriminator": {
+        "mapping": {
+          "ack": "#/$defs/Ack",
+          "chat": "#/$defs/ChatMessageEnvelope",
+          "closed": "#/$defs/Closed",
+          "error": "#/$defs/ErrorMessage",
+          "event": "#/$defs/EventMessage",
+          "members": "#/$defs/MembersMessage",
+          "playback": "#/$defs/PlaybackMessage",
+          "pong": "#/$defs/Pong",
+          "queue": "#/$defs/QueueMessage",
+          "room": "#/$defs/RoomInfoMessage",
+          "snapshot": "#/$defs/Snapshot"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Pong"
+        },
+        {
+          "$ref": "#/$defs/Snapshot"
+        },
+        {
+          "$ref": "#/$defs/PlaybackMessage"
+        },
+        {
+          "$ref": "#/$defs/QueueMessage"
+        },
+        {
+          "$ref": "#/$defs/MembersMessage"
+        },
+        {
+          "$ref": "#/$defs/RoomInfoMessage"
+        },
+        {
+          "$ref": "#/$defs/EventMessage"
+        },
+        {
+          "$ref": "#/$defs/ChatMessageEnvelope"
+        },
+        {
+          "$ref": "#/$defs/Ack"
+        },
+        {
+          "$ref": "#/$defs/ErrorMessage"
+        },
+        {
+          "$ref": "#/$defs/Closed"
+        }
+      ],
+      "title": "ServerMessage"
+    },
+    "SlugResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug"
+      ],
+      "type": "object",
+      "title": "SlugResponse"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "snapshot",
+          "default": "snapshot",
+          "type": "string"
+        },
+        "serverTime": {
+          "type": "number"
+        },
+        "selfUserId": {
+          "type": "string"
+        },
+        "room": {
+          "$ref": "#/$defs/RoomInfo"
+        },
+        "playback": {
+          "$ref": "#/$defs/PlaybackState"
+        },
+        "queue": {
+          "$ref": "#/$defs/QueueState"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/MemberView"
+          },
+          "type": "array"
+        },
+        "stats": {
+          "$ref": "#/$defs/SyncStats"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/RoomEvent"
+          },
+          "type": "array"
+        },
+        "chat": {
+          "items": {
+            "$ref": "#/$defs/ChatMessage"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "serverTime",
+        "selfUserId",
+        "room",
+        "playback",
+        "queue",
+        "members",
+        "stats",
+        "events",
+        "chat"
+      ],
+      "type": "object",
+      "title": "Snapshot"
+    },
+    "StreamInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "trackId": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/StreamMode"
+        },
+        "url": {
+          "type": "string"
+        },
+        "mirrors": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "codec": {
+          "type": "string"
+        },
+        "bitrate": {
+          "type": "integer"
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "trackId",
+        "mode",
+        "url",
+        "mirrors",
+        "codec",
+        "bitrate",
+        "expiresAt"
+      ],
+      "type": "object",
+      "title": "StreamInfo"
+    },
+    "StreamMode": {
+      "enum": [
+        "direct",
+        "proxy"
+      ],
+      "type": "string",
+      "title": "StreamMode"
+    },
+    "SyncState": {
+      "enum": [
+        "in_sync",
+        "catching_up",
+        "buffering",
+        "unstable",
+        "idle"
+      ],
+      "type": "string",
+      "title": "SyncState"
+    },
+    "SyncStats": {
+      "additionalProperties": false,
+      "description": "Статистика рассинхрона по комнате (|drift| за последние ~30 с по всем клиентам).",
+      "properties": {
+        "medianMs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "p95Ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "samples": {
+          "default": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "medianMs",
+        "p95Ms",
+        "samples"
+      ],
+      "type": "object",
+      "title": "SyncStats"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "artists": {
+          "items": {
+            "$ref": "#/$defs/ArtistRef"
+          },
+          "type": "array"
+        },
+        "albumId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "albumTitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "durationMs": {
+          "type": "integer"
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "available": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "artists",
+        "albumId",
+        "albumTitle",
+        "durationMs",
+        "coverUrl",
+        "available"
+      ],
+      "type": "object",
+      "title": "Track"
+    },
+    "TrackList": {
+      "additionalProperties": false,
+      "description": "Набор треков сущности (альбом, плейлист, артист, «Мне нравится»).",
+      "properties": {
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EntityKind"
+            },
+            {
+              "const": "liked",
+              "type": "string"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tracks": {
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        },
+        "albums": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AlbumSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "title",
+        "subtitle",
+        "coverUrl",
+        "tracks",
+        "albums"
+      ],
+      "type": "object",
+      "title": "TrackList"
+    }
+  }
+}
