@@ -31,8 +31,23 @@ test('mobile room: bottom tabs, mini player, full player sheet', async ({ page }
   await expect(sheet).toBeHidden()
 
   // Нет горизонтальной прокрутки на узком экране.
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  )
-  expect(overflow).toBeLessThanOrEqual(0)
+  for (const tab of ['Очередь', 'Добавить', 'Люди', 'Чат']) {
+    await nav.getByRole('button', { name: tab }).click()
+    const report = await page.evaluate(() => {
+      const width = document.documentElement.clientWidth
+      const offenders = [...document.querySelectorAll<HTMLElement>('body *')]
+        .filter((el) => el.offsetParent !== null && el.getBoundingClientRect().right > width + 1)
+        .slice(0, 5)
+        .map((el) => {
+          const r = el.getBoundingClientRect()
+          const cls = typeof el.className === 'string' ? el.className.slice(0, 80) : ''
+          return `${el.tagName.toLowerCase()}.${cls} right=${String(Math.round(r.right))} w=${String(Math.round(r.width))}`
+        })
+      return {
+        overflow: document.documentElement.scrollWidth - width,
+        offenders,
+      }
+    })
+    expect(report.overflow, `${tab}: ${report.offenders.join(' | ')}`).toBeLessThanOrEqual(0)
+  }
 })
