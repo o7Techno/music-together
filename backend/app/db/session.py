@@ -33,6 +33,12 @@ class Database:
         async with self.sessionmaker() as session:
             yield session
 
+    async def create_all(self) -> None:
+        from app.db.models import Base  # noqa: PLC0415 — модели нужны только здесь
+
+        async with self.engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
     async def ping(self) -> bool:
         try:
             async with self.engine.connect() as conn:

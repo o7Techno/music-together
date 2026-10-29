@@ -1,22 +1,53 @@
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
+
 import { defineConfig, devices } from '@playwright/test'
 
-const port = Number(process.env.E2E_PORT ?? 5173)
+// E2E поднимает собственные бэкенд (FakeProvider, SQLite во временном каталоге) и фронт на
+// отдельных портах, чтобы не мешать `npm run dev`.
+const API_PORT = Number(process.env.E2E_API_PORT ?? 8011)
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5181)
+const origin = `http://localhost:${String(WEB_PORT)}`
+const dbFile = join(tmpdir(), `music-together-e2e-${String(Date.now())}.db`)
+  .split(sep)
+  .join('/')
 
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
+  workers: 1,
+  timeout: 120_000,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: `http://localhost:${port}`,
+    baseURL: origin,
     trace: 'retain-on-failure',
+    launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: {
-    command: `npm run dev -- --port ${port}`,
-    url: `http://localhost:${port}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${String(API_PORT)}`,
+      cwd: '../backend',
+      url: `http://127.0.0.1:${String(API_PORT)}/health`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: {
+        ENV: 'test',
+        MUSIC_PROVIDER: 'fake',
+        DATABASE_URL: `sqlite+aiosqlite:///${dbFile}`,
+        DB_AUTO_CREATE: 'true',
+        PUBLIC_ORIGIN: origin,
+        LOG_LEVEL: 'WARNING',
+      },
+    },
+    {
+      command: `npm run dev -- --port ${String(WEB_PORT)}`,
+      url: origin,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { BACKEND_URL: `http://127.0.0.1:${String(API_PORT)}` },
+    },
+  ],
 })

@@ -30,6 +30,36 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: music
+          POSTGRES_PASSWORD: music
+          POSTGRES_DB: music
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U music" --health-interval 2s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+asyncpg://music:music@localhost:5432/music
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --python 3.12
+      - name: Alembic upgrade on PostgreSQL
+        run: uv run alembic upgrade head
+      - name: Models match migrations
+        run: uv run alembic check
+      - name: Downgrade and upgrade again
+        run: uv run alembic downgrade base && uv run alembic upgrade head
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -73,6 +103,14 @@ jobs:
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
+      - name: Protocol types are up to date
+        run: |
+          npm run gen:types
+          git diff --exit-code -- frontend/src/shared/protocol/
+      - name: Generate FakeProvider audio
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          python3 scripts/gen_fake_audio.py
       - name: Playwright
         run: npx playwright test
         working-directory: frontend

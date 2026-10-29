@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     log_json: bool = False
 
     database_url: str = "postgresql+asyncpg://music:music@localhost:5432/music"
+    # Создать таблицы при старте (только для e2e/локальных SQLite-запусков; в проде — Alembic).
+    db_auto_create: bool = False
 
     # Публичный origin фронтенда: используется для проверки Origin у WS и изменяющих REST-запросов.
     public_origin: str = "http://localhost:5173"

@@ -2,17 +2,82 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Токены темы. Тёмная — по умолчанию, светлая — класс .light на <html>. */
 :root {
   color-scheme: dark;
+  --c-surface-0: #0b0b0d;
+  --c-surface-1: #131317;
+  --c-surface-2: #1b1b21;
+  --c-surface-3: #26262e;
+  --c-surface-4: #32323c;
+  --c-border: #2c2c35;
+  --c-fg: #f2f2f5;
+  --c-fg-muted: #a1a1ad;
+  --c-fg-subtle: #6e6e7a;
+  --c-accent: #ffcc33;
+  --c-accent-strong: #ffd95c;
+  --c-ok: #3ddc84;
+  --c-warn: #f5b041;
+  --c-bad: #ff5c5c;
 }
 
-body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
-  font-family:
-    'Inter',
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+:root.light {
+  color-scheme: light;
+  --c-surface-0: #f6f6f8;
+  --c-surface-1: #ffffff;
+  --c-surface-2: #f0f0f3;
+  --c-surface-3: #e6e6eb;
+  --c-surface-4: #d9d9e0;
+  --c-border: #dedee5;
+  --c-fg: #15151a;
+  --c-fg-muted: #555561;
+  --c-fg-subtle: #85858f;
+  --c-accent: #e6a800;
+  --c-accent-strong: #cc9600;
+  --c-ok: #1a9e55;
+  --c-warn: #c27c0e;
+  --c-bad: #d93636;
+}
+
+@theme inline {
+  --color-surface-0: var(--c-surface-0);
+  --color-surface-1: var(--c-surface-1);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-3: var(--c-surface-3);
+  --color-surface-4: var(--c-surface-4);
+  --color-border: var(--c-border);
+  --color-fg: var(--c-fg);
+  --color-fg-muted: var(--c-fg-muted);
+  --color-fg-subtle: var(--c-fg-subtle);
+  --color-accent: var(--c-accent);
+  --color-accent-strong: var(--c-accent-strong);
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-bad: var(--c-bad);
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-surface-0 text-fg antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+@utility focus-ring {
+  @apply focus-visible:ring-accent focus-visible:ring-offset-surface-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-2;
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-surface-4) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

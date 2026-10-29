@@ -21,7 +21,9 @@
 | `npm run dev:fake` | бэкенд + Vite без Postgres-контейнера |
 | `npm run check` | все линтеры + тайпчекеры + unit/integration тесты |
 | `npm run lint` / `typecheck` / `test` | по отдельности (суффиксы `:backend` / `:frontend`) |
-| `npm run e2e` | Playwright (сам поднимает dev-сервер) |
+| `npm run e2e` | Playwright: сам поднимает бэкенд (fake, SQLite) на :8011 и Vite на :5181 |
+| `npm run gen:types` | JSON Schema из Pydantic → `frontend/src/shared/protocol/generated.ts` |
+| `python scripts/gen_fake_audio.py` | тестовые треки FakeProvider (нужен ffmpeg; один раз после клона) |
 | `npm run format` | ruff format/fix + prettier |
 
 Бэкенд напрямую: `cd backend && uv run pytest`, `uv run mypy`, `uv run ruff check .`.
@@ -42,6 +44,12 @@ scripts/   docs/   .github/workflows/
 - `providers/` — `MusicProvider` (yandex, fake). Весь код `yandex_music` — **только** здесь.
 - `frontend/src/player/` — движок синхронизации на чистом TS без React/DOM; часы, аудиоэлемент и
   планировщик внедряются через интерфейсы, тестируется в Vitest без браузера.
+
+## Тесты
+- Бэкенд unit — домен на FakeClock/FakeTimers (`tests/test_room.py`), интеграционные — живой uvicorn
+  в потоке + `websockets`/`httpx` (`tests/live.py`), SQLite во временном каталоге.
+- Фронт unit — движок синхронизации на FakeClock/FakeScheduler/FakeDeck (`src/player/testing.ts`).
+- E2E — `frontend/e2e`, хук `window.__syncProbe()`; замер синхрона пишет `sync-stats.json`.
 
 ## Соглашения
 - Conventional Commits, маленькие логические коммиты. Фаза закрыта только при зелёных

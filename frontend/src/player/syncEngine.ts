@@ -346,12 +346,15 @@ export class SyncEngine {
     this.started = true
     this.startLatencyPending = true
     deck.play().catch((err: unknown) => {
-      // Автовоспроизведение запрещено — нужен жест пользователя.
       this.d.logger.warn('play() rejected', { err: String(err) })
-      this.audioUnlocked = false
       this.started = false
-      this.sendStatus()
-      this.emit()
+      // Только NotAllowedError — это политика автовоспроизведения (нужен жест пользователя).
+      // AbortError (прервали новой загрузкой/паузой) и ошибки источника обрабатываются отдельно.
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        this.audioUnlocked = false
+        this.sendStatus()
+        this.emit()
+      }
     })
   }
 
@@ -392,7 +395,11 @@ export class SyncEngine {
         this.d.scheduler.clearInterval(poll)
         resolve()
       }
-      unsubs.push(deck.on('canplaythrough', done), deck.on('seeked', done), deck.on('canplay', done))
+      unsubs.push(
+        deck.on('canplaythrough', done),
+        deck.on('seeked', done),
+        deck.on('canplay', done),
+      )
       const poll = this.d.scheduler.setInterval(done, 100)
     })
   }
@@ -609,6 +616,11 @@ export class SyncEngine {
   }
 
   // ── Отладка и e2e ───────────────────────────────────────────────────────────
+
+  setLatencyCompensation(enabled: boolean): void {
+    this.latencyCompensation = enabled
+    this.emit()
+  }
 
   setProfile(profile: DriftProfile): void {
     this.controller.profile = profile

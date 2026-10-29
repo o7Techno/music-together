@@ -18,14 +18,7 @@ export interface Scheduler {
 }
 
 export type DeckEvent =
-  | 'canplay'
-  | 'canplaythrough'
-  | 'playing'
-  | 'waiting'
-  | 'stalled'
-  | 'seeked'
-  | 'error'
-  | 'ended'
+  'canplay' | 'canplaythrough' | 'playing' | 'waiting' | 'stalled' | 'seeked' | 'error' | 'ended'
 
 /** Один аудиоэлемент. Движок держит два: текущий и предзагружаемый следующий. */
 export interface AudioDeck {

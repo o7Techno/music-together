@@ -57,7 +57,9 @@ export class FakeScheduler implements Scheduler {
     const target = this.clock.t + ms
     for (;;) {
       await flush()
-      const due = this.timers.filter((t) => t.at <= target).sort((a, b) => a.at - b.at || a.id - b.id)
+      const due = this.timers
+        .filter((t) => t.at <= target)
+        .sort((a, b) => a.at - b.at || a.id - b.id)
       const next = due[0]
       if (!next) break
       if (next.at > this.clock.t) this.clock.t = next.at
@@ -193,7 +195,9 @@ export class FakeDeck implements AudioDeck {
   play(): Promise<void> {
     if (this.failNextPlay) {
       this.failNextPlay = false
-      return Promise.reject(new Error('NotAllowedError'))
+      const err = new Error('play() requires a user gesture')
+      err.name = 'NotAllowedError'
+      return Promise.reject(err)
     }
     this.playCalls.push(this.clock.t)
     if (!this.paused) return Promise.resolve()

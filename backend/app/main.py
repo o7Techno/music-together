@@ -69,6 +69,8 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
         configure_logging(settings.log_level, json=settings.log_json)
         context = ctx or build_context(settings)
         app.state.ctx = context
+        if settings.db_auto_create:
+            await context.db.create_all()
         janitor = asyncio.create_task(context.rooms.run_janitor())
         log.info(
             "startup",

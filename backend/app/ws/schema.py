@@ -52,7 +52,7 @@ SERVER_MODELS: list[type[BaseModel]] = [
 
 
 def _strip_titles(node: Any) -> None:
-    """Pydantic даёт `title` каждому полю — генератор TS превратил бы их в лишние именованные типы."""
+    """Pydantic даёт `title` каждому полю — генератор TS сделал бы из них лишние типы."""
     if isinstance(node, dict):
         node.pop("title", None)
         for key, value in node.items():
@@ -95,6 +95,7 @@ def build_schema() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # Windows-консоль
+    # UTF-8 и LF независимо от ОС: схема коммитится и сравнивается в CI.
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")  # type: ignore[union-attr]  # TextIO
     json.dump(build_schema(), sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")

@@ -33,9 +33,7 @@ export const DESKTOP_PROFILE: DriftProfile = {
 }
 
 export type DriftAction =
-  | { kind: 'none'; rate: 1 }
-  | { kind: 'rate'; rate: number }
-  | { kind: 'seek'; targetMs: number }
+  { kind: 'none'; rate: 1 } | { kind: 'rate'; rate: number } | { kind: 'seek'; targetMs: number }
 
 const SMOOTHING_WINDOW = 3
 const SEEK_LATENCY_MIN = 0
