@@ -145,23 +145,8 @@ jobs:
           } >> .env
       - name: docker compose up -d
         run: docker compose up -d --build --wait --wait-timeout 180
-      - name: Smoke test over HTTPS
-        run: |
-          set -eu
-          curl -fsSk https://localhost/health
-          curl -fsSk https://localhost/ready
-          curl -fsSk https://localhost/ | grep -q "<title>Слушаем вместе</title>"
-          curl -fsSkI https://localhost/ | grep -qi "content-security-policy"
-          curl -fsSk -c jar -H "Origin: https://localhost" -H "Content-Type: application/json" \
-            -d '{"name":"CI"}' https://localhost/api/auth/dev-login
-          curl -fsSk -b jar -H "Origin: https://localhost" -H "Content-Type: application/json" \
-            -d '{"name":"CI room"}' https://localhost/api/rooms | grep -q slug
-          curl -fsSk -b jar "https://localhost/api/search?q=%D0%BC%D0%B8%D0%BD%D1%83%D1%82%D0%B0" | grep -q fake-3
-      - name: Restart keeps data
-        run: |
-          docker compose restart backend
-          for i in $(seq 1 30); do curl -fsSk https://localhost/ready && break; sleep 2; done
-          curl -fsSk -b jar https://localhost/api/rooms | grep -q "CI room"
+      - name: Smoke test over HTTPS (incl. restart)
+        run: SMOKE_RESTART=1 bash scripts/smoke.sh https://localhost
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color --tail 200

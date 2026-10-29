@@ -1,9 +1,5 @@
 # Caddy: статика фронта, reverse proxy на бэкенд, автоматический HTTPS (Let's Encrypt),
-# заголовки безопасности (SPEC §7.6). Домен и почта — из переменных окружения.
-{
-	email {$ACME_EMAIL:admin@example.com}
-}
-
+# заголовки безопасности (SPEC §7.6). Домен — из переменной окружения DOMAIN.
 {$DOMAIN:localhost} {
 	encode zstd gzip
 

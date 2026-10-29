@@ -1,10 +1,9 @@
 #!/usr/bin/env sh
 # Создать .env для продакшена из .env.example со случайными секретами.
-#   ./scripts/init-env.sh music.example.com admin@example.com
+#   ./scripts/init-env.sh music.example.com
 set -eu
 cd "$(dirname "$0")/.."
-DOMAIN="${1:?Укажите домен: ./scripts/init-env.sh music.example.com [email]}"
-EMAIL="${2:-}"
+DOMAIN="${1:?Укажите домен: ./scripts/init-env.sh music.example.com}"
 if [ -e .env ]; then
   echo ".env уже существует — не перезаписываю" >&2
   exit 1
@@ -17,7 +16,6 @@ FERNET_KEY=$(openssl rand -base64 32 | tr -d '\n' | tr '+/' '-_')
 sed \
   -e "s|^ENV=.*|ENV=prod|" \
   -e "s|^DOMAIN=.*|DOMAIN=$DOMAIN|" \
-  -e "s|^ACME_EMAIL=.*|ACME_EMAIL=$EMAIL|" \
   -e "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=https://$DOMAIN|" \
   -e "s|^SESSION_SECRET=.*|SESSION_SECRET=$SESSION_SECRET|" \
   -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$POSTGRES_PASSWORD|" \

@@ -55,7 +55,7 @@ npm --prefix frontend run dev
 3. **Код и конфигурация.**
    ```bash
    git clone https://github.com/o7Techno/music-together.git && cd music-together
-   ./scripts/init-env.sh music.example.com you@example.com   # .env со случайными секретами
+   ./scripts/init-env.sh music.example.com   # .env со случайными секретами
    ```
    Остальное в `.env` можно не трогать: провайдер — Яндекс, режим аудио — `direct`.
 4. **Запуск.**
@@ -77,7 +77,7 @@ npm --prefix frontend run dev
 
 | Переменная | Назначение |
 |---|---|
-| `DOMAIN`, `ACME_EMAIL` | домен и почта для HTTPS (Caddy + Let's Encrypt) |
+| `DOMAIN` | домен; HTTPS-сертификат Caddy получает и продлевает сам (Let's Encrypt) |
 | `PUBLIC_ORIGIN` | origin фронта для проверки Origin (CSRF, WebSocket) |
 | `SESSION_SECRET` | секрет сессий (≥ 32 символов) |
 | `TOKEN_ENCRYPTION_KEYS` | ключи Fernet для токенов Яндекса; несколько через запятую — ротация |
