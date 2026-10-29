@@ -215,6 +215,8 @@ export interface ArtistSummary {
 export interface AuthConfig {
   devLogin: boolean
   yandexLogin: boolean
+  sentryDsn: string | null
+  environment: string
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema

@@ -353,11 +353,28 @@
         },
         "yandexLogin": {
           "type": "boolean"
+        },
+        "sentryDsn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "environment": {
+          "default": "dev",
+          "type": "string"
         }
       },
       "required": [
         "devLogin",
-        "yandexLogin"
+        "yandexLogin",
+        "sentryDsn",
+        "environment"
       ],
       "type": "object",
       "title": "AuthConfig"

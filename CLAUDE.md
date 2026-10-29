@@ -34,6 +34,11 @@
 `PYTHONIOENCODING=utf-8`. Фоновые dev-серверы на Windows оставляют дочерние процессы
 (uvicorn reload-worker, vite): останавливать по PID слушателя порта, а не `taskkill /IM`.
 
+## Прод
+`docker-compose.yml` (db, backend, web=Caddy), `backend/Dockerfile`, `frontend/Dockerfile`, `Caddyfile`.
+`.env` для сервера — `scripts/init-env.sh <домен> <почта>`. Бэкапы — `scripts/backup.sh`,
+эксплуатация — `docs/operations.md`. CI job `docker` поднимает весь стек и проверяет его по HTTPS.
+
 ## Структура
 ```
 backend/app/{api,ws,rooms,providers,auth,db,core}   backend/tests

@@ -40,6 +40,9 @@ class SessionInfo(ApiModel):
 class AuthConfig(ApiModel):
     dev_login: bool
     yandex_login: bool
+    sentry_dsn: str | None = None
+    """Публичный DSN Sentry для фронта (не секрет); None — выключено."""
+    environment: str = "dev"
 
 
 class DevLoginRequest(ApiModel):

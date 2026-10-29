@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     ym_proxy_url: str | None = None
 
     sentry_dsn: str | None = None
+    sentry_frontend_dsn: str | None = None
 
     @property
     def is_prod(self) -> bool:

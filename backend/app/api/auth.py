@@ -21,6 +21,8 @@ async def auth_config(ctx: Ctx) -> AuthConfig:
     return AuthConfig(
         dev_login=ctx.settings.allow_dev_login,
         yandex_login=ctx.settings.music_provider is MusicProviderKind.YANDEX,
+        sentry_dsn=ctx.settings.sentry_frontend_dsn,
+        environment=ctx.settings.env.value,
     )
 
 

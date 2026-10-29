@@ -20,6 +20,7 @@ from app.api.rooms import router as rooms_router
 from app.api.stream import router as stream_router
 from app.api.yandex_auth import router as yandex_auth_router
 from app.auth.crypto import TokenCipher
+from app.auth.sessions import delete_expired_sessions
 from app.auth.yandex_login import DeviceFlowStore
 from app.auth.yandex_oauth import YandexAuth, YandexAuthClient
 from app.core.clock import Clock, SystemClock
@@ -27,6 +28,7 @@ from app.core.config import MusicProviderKind, Settings, get_settings
 from app.core.context import AppContext
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
+from app.core.observability import init_sentry, validate_settings
 from app.core.ratelimit import RateLimiter
 from app.db.session import Database
 from app.providers.factory import ProviderFactory, YandexProviderBuilder
@@ -73,17 +75,34 @@ def build_context(settings: Settings, clock: Clock | None = None) -> AppContext:
     )
 
 
+async def _cleanup_sessions(ctx: AppContext, interval_s: float = 3600) -> None:
+    """Раз в час удалять истёкшие сессии."""
+    while True:
+        try:
+            async with ctx.db.sessionmaker() as db:
+                removed = await delete_expired_sessions(db)
+            if removed:
+                log.info("expired_sessions_removed", count=removed)
+        except Exception:
+            log.exception("session_cleanup_failed")
+        await asyncio.sleep(interval_s)
+
+
 def create_app(settings: Settings | None = None, ctx: AppContext | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging(settings.log_level, json=settings.log_json)
+        if problems := validate_settings(settings):
+            raise RuntimeError("Некорректная конфигурация: " + "; ".join(problems))
+        init_sentry(settings)
         context = ctx or build_context(settings)
         app.state.ctx = context
         if settings.db_auto_create:
             await context.db.create_all()
         janitor = asyncio.create_task(context.rooms.run_janitor())
+        sessions_janitor = asyncio.create_task(_cleanup_sessions(context))
         log.info(
             "startup",
             env=settings.env,
@@ -93,9 +112,10 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
         try:
             yield
         finally:
-            janitor.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await janitor
+            for task in (janitor, sessions_janitor):
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
             await context.rooms.shutdown()
             await asyncio.sleep(0.05)  # дать писателям WS отправить close-фреймы
             await context.db.dispose()

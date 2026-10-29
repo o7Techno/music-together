@@ -153,13 +153,13 @@ _Lighthouse (12, mobile и desktop): главная и комната — 100/10
 
 ## Фаза 5 — Продакшен-готовность
 
-- [ ] Безопасность §7.6: CSRF (Origin), CSP/HSTS/nosniff в Caddy, лимиты WS, маскирование токенов
-- [ ] Rate limiting REST (поиск, резолв, стрим)
-- [ ] JSON-логи с request id / room id
-- [ ] Graceful shutdown: сохранить комнаты, закрыть WS с кодом «переподключитесь»
-- [ ] Production `docker-compose.yml` (postgres, backend с миграциями при старте, caddy со статикой) + `Caddyfile`
-- [ ] Скрипт бэкапа PostgreSQL + инструкция восстановления
-- [ ] Sentry (опционально, по env) для бэка и фронта
-- [ ] README: быстрый старт (в т.ч. FakeProvider), деплой на VPS, env, бэкапы, ограничения, схема синхронизации
-- [ ] `docs/manual-qa.md` финальный, `docs/known-issues.md`
-- [ ] CI: сборка Docker-образов; финальный прогон всех проверок
+- [x] Безопасность §7.6: CSRF (Origin), CSP/HSTS/nosniff в Caddy, лимиты WS, маскирование токенов
+- [x] Rate limiting REST (поиск, резолв, стрим)
+- [x] JSON-логи с request id / room id
+- [x] Graceful shutdown: сохранить комнаты, закрыть WS с кодом «переподключитесь»
+- [x] Production `docker-compose.yml` (postgres, backend с миграциями при старте, caddy со статикой) + `Caddyfile`
+- [x] Скрипт бэкапа PostgreSQL + инструкция восстановления
+- [x] Sentry (опционально, по env) для бэка и фронта
+- [x] README: быстрый старт (в т.ч. FakeProvider), деплой на VPS, env, бэкапы, ограничения, схема синхронизации
+- [x] `docs/manual-qa.md` финальный, `docs/known-issues.md`
+- [x] CI: сборка Docker-образов; финальный прогон всех проверок

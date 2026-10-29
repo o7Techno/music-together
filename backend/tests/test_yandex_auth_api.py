@@ -88,7 +88,9 @@ def client(base: str) -> httpx.AsyncClient:
 async def test_auth_config_offers_yandex_and_hides_dev_login(ya_server: str) -> None:
     async with client(ya_server) as http:
         cfg = (await http.get("/api/auth/config")).json()
-    assert cfg == {"devLogin": True, "yandexLogin": True}  # ENV=test — dev-логин разрешён
+    assert cfg["devLogin"] is True  # ENV=test — dev-логин разрешён
+    assert cfg["yandexLogin"] is True
+    assert cfg["sentryDsn"] is None
 
 
 async def test_device_flow_logs_in_and_stores_encrypted_token(
