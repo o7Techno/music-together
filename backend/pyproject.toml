@@ -43,10 +43,11 @@ ignore = [
     "TRY003",  # long messages in exceptions are ok
     "PLR0913", # explicit args over config objects in a few domain functions
     "RUF001", "RUF002", "RUF003", # cyrillic text in strings/docstrings/comments is intended
+    "RUF012",  # pydantic copies mutable defaults; ruff does not see indirect BaseModel subclasses
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "PLR0915", "S105", "S106"]
+"tests/**" = ["S101", "PLR0915", "S105", "S106", "S311"]
 "../scripts/**" = ["T201", "S101"]
 
 [tool.mypy]
