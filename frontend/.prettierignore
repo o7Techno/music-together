@@ -4,3 +4,4 @@ playwright-report
 test-results
 package-lock.json
 src/shared/protocol/generated.ts
+src/shared/protocol/schema.json

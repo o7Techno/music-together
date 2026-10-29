@@ -8,6 +8,7 @@ import type { Me } from '@/shared/protocol/generated'
 import { Button } from '@/shared/ui/Button'
 import { FullScreenSpinner } from '@/shared/ui/Spinner'
 
+import { AccountNotice } from './AccountNotice'
 import { LoginCard } from './LoginCard'
 import { useLogout, useMe } from './useAuth'
 
@@ -23,6 +24,7 @@ export function HomePage() {
         </div>
         {me.data && <UserBadge me={me.data} />}
       </header>
+      {me.data && <AccountNotice me={me.data} />}
       {me.data ? <Rooms me={me.data} /> : <LoginCard />}
     </main>
   )

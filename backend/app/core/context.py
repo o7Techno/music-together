@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.auth.crypto import TokenCipher
+from app.auth.yandex_login import DeviceFlowStore
+from app.auth.yandex_oauth import YandexAuth
 from app.core.clock import Clock
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
@@ -25,3 +27,6 @@ class AppContext:
     cipher: TokenCipher | None
     search_limiter: RateLimiter
     stream_limiter: RateLimiter
+    login_limiter: RateLimiter
+    yandex_auth: YandexAuth | None
+    device_flows: DeviceFlowStore

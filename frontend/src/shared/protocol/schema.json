@@ -65,6 +65,12 @@
     "CmdSetRepeat": {
       "$ref": "#/$defs/CmdSetRepeat"
     },
+    "DevicePollResponse": {
+      "$ref": "#/$defs/DevicePollResponse"
+    },
+    "DeviceStartResponse": {
+      "$ref": "#/$defs/DeviceStartResponse"
+    },
     "DriftReport": {
       "$ref": "#/$defs/DriftReport"
     },
@@ -146,6 +152,12 @@
     "RepeatMode": {
       "$ref": "#/$defs/RepeatMode"
     },
+    "ResolveFailure": {
+      "$ref": "#/$defs/ResolveFailure"
+    },
+    "ResolveResponse": {
+      "$ref": "#/$defs/ResolveResponse"
+    },
     "ResolvedEntity": {
       "$ref": "#/$defs/ResolvedEntity"
     },
@@ -208,12 +220,19 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId"],
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
       "type": "object",
       "title": "Ack"
     },
     "AddPosition": {
-      "enum": ["end", "next", "now"],
+      "enum": [
+        "end",
+        "next",
+        "now"
+      ],
       "type": "string",
       "title": "AddPosition"
     },
@@ -266,7 +285,14 @@
           "default": null
         }
       },
-      "required": ["id", "title", "artists", "year", "trackCount", "coverUrl"],
+      "required": [
+        "id",
+        "title",
+        "artists",
+        "year",
+        "trackCount",
+        "coverUrl"
+      ],
       "type": "object",
       "title": "AlbumSummary"
     },
@@ -280,7 +306,10 @@
           "type": "string"
         }
       },
-      "required": ["id", "name"],
+      "required": [
+        "id",
+        "name"
+      ],
       "type": "object",
       "title": "ArtistRef"
     },
@@ -305,7 +334,11 @@
           "default": null
         }
       },
-      "required": ["id", "name", "coverUrl"],
+      "required": [
+        "id",
+        "name",
+        "coverUrl"
+      ],
       "type": "object",
       "title": "ArtistSummary"
     },
@@ -319,7 +352,10 @@
           "type": "boolean"
         }
       },
-      "required": ["devLogin", "yandexLogin"],
+      "required": [
+        "devLogin",
+        "yandexLogin"
+      ],
       "type": "object",
       "title": "AuthConfig"
     },
@@ -374,7 +410,13 @@
           "default": null
         }
       },
-      "required": ["kind", "track", "album", "artist", "playlist"],
+      "required": [
+        "kind",
+        "track",
+        "album",
+        "artist",
+        "playlist"
+      ],
       "type": "object",
       "title": "BestResult"
     },
@@ -427,7 +469,15 @@
           "default": null
         }
       },
-      "required": ["id", "atMs", "userId", "userName", "text", "emoji", "trackId"],
+      "required": [
+        "id",
+        "atMs",
+        "userId",
+        "userName",
+        "text",
+        "emoji",
+        "trackId"
+      ],
       "type": "object",
       "title": "ChatMessage"
     },
@@ -443,7 +493,10 @@
           "$ref": "#/$defs/ChatMessage"
         }
       },
-      "required": ["type", "message"],
+      "required": [
+        "type",
+        "message"
+      ],
       "type": "object",
       "title": "ChatMessageEnvelope"
     },
@@ -464,7 +517,11 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId", "text"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "text"
+      ],
       "type": "object",
       "title": "ChatSend"
     },
@@ -570,12 +627,20 @@
           "default": "idle"
         }
       },
-      "required": ["type", "audioUnlocked"],
+      "required": [
+        "type",
+        "audioUnlocked"
+      ],
       "type": "object",
       "title": "ClientStatus"
     },
     "CloseReason": {
-      "enum": ["deleted", "kicked", "restart", "replaced"],
+      "enum": [
+        "deleted",
+        "kicked",
+        "restart",
+        "replaced"
+      ],
       "type": "string",
       "title": "CloseReason"
     },
@@ -592,7 +657,10 @@
           "$ref": "#/$defs/CloseReason"
         }
       },
-      "required": ["type", "reason"],
+      "required": [
+        "type",
+        "reason"
+      ],
       "type": "object",
       "title": "Closed"
     },
@@ -618,7 +686,11 @@
           ]
         }
       },
-      "required": ["type", "clientMsgId", "expectedQueueItemId"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "expectedQueueItemId"
+      ],
       "type": "object",
       "title": "CmdNext"
     },
@@ -634,7 +706,10 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId"],
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
       "type": "object",
       "title": "CmdPause"
     },
@@ -650,7 +725,10 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId"],
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
       "type": "object",
       "title": "CmdPlay"
     },
@@ -669,7 +747,11 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId", "queueItemId"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "queueItemId"
+      ],
       "type": "object",
       "title": "CmdPlayItem"
     },
@@ -695,7 +777,11 @@
           ]
         }
       },
-      "required": ["type", "clientMsgId", "expectedQueueItemId"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "expectedQueueItemId"
+      ],
       "type": "object",
       "title": "CmdPrev"
     },
@@ -725,7 +811,12 @@
           ]
         }
       },
-      "required": ["type", "clientMsgId", "positionMs", "expectedQueueItemId"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "positionMs",
+        "expectedQueueItemId"
+      ],
       "type": "object",
       "title": "CmdSeek"
     },
@@ -744,9 +835,72 @@
           "$ref": "#/$defs/RepeatMode"
         }
       },
-      "required": ["type", "clientMsgId", "mode"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "mode"
+      ],
       "type": "object",
       "title": "CmdSetRepeat"
+    },
+    "DevicePollResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "ok",
+            "expired"
+          ],
+          "type": "string"
+        },
+        "me": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Me"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "status",
+        "me"
+      ],
+      "type": "object",
+      "title": "DevicePollResponse"
+    },
+    "DeviceStartResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "flowId": {
+          "type": "string"
+        },
+        "userCode": {
+          "type": "string"
+        },
+        "verificationUrl": {
+          "type": "string"
+        },
+        "expiresIn": {
+          "type": "integer"
+        },
+        "interval": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "flowId",
+        "userCode",
+        "verificationUrl",
+        "expiresIn",
+        "interval"
+      ],
+      "type": "object",
+      "title": "DeviceStartResponse"
     },
     "DriftReport": {
       "additionalProperties": false,
@@ -783,12 +937,20 @@
           "default": null
         }
       },
-      "required": ["type", "driftMs"],
+      "required": [
+        "type",
+        "driftMs"
+      ],
       "type": "object",
       "title": "DriftReport"
     },
     "EntityKind": {
-      "enum": ["track", "album", "artist", "playlist"],
+      "enum": [
+        "track",
+        "album",
+        "artist",
+        "playlist"
+      ],
       "type": "string",
       "title": "EntityKind"
     },
@@ -818,7 +980,12 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId", "code", "message"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "code",
+        "message"
+      ],
       "type": "object",
       "title": "ErrorMessage"
     },
@@ -856,7 +1023,10 @@
           "$ref": "#/$defs/RoomEvent"
         }
       },
-      "required": ["type", "event"],
+      "required": [
+        "type",
+        "event"
+      ],
       "type": "object",
       "title": "EventMessage"
     },
@@ -887,9 +1057,20 @@
         },
         "provider": {
           "type": "string"
+        },
+        "providerConnected": {
+          "type": "boolean"
         }
       },
-      "required": ["id", "login", "displayName", "avatarUrl", "hasPlus", "provider"],
+      "required": [
+        "id",
+        "login",
+        "displayName",
+        "avatarUrl",
+        "hasPlus",
+        "provider",
+        "providerConnected"
+      ],
       "type": "object",
       "title": "Me"
     },
@@ -989,7 +1170,11 @@
           "$ref": "#/$defs/SyncStats"
         }
       },
-      "required": ["type", "members", "stats"],
+      "required": [
+        "type",
+        "members",
+        "stats"
+      ],
       "type": "object",
       "title": "MembersMessage"
     },
@@ -1005,7 +1190,10 @@
           "type": "number"
         }
       },
-      "required": ["type", "t0"],
+      "required": [
+        "type",
+        "t0"
+      ],
       "type": "object",
       "title": "Ping"
     },
@@ -1021,7 +1209,10 @@
           "$ref": "#/$defs/PlaybackState"
         }
       },
-      "required": ["type", "state"],
+      "required": [
+        "type",
+        "state"
+      ],
       "type": "object",
       "title": "PlaybackMessage"
     },
@@ -1096,7 +1287,11 @@
       "title": "PlaybackState"
     },
     "PlaybackStatus": {
-      "enum": ["playing", "paused", "loading"],
+      "enum": [
+        "playing",
+        "paused",
+        "loading"
+      ],
       "type": "string",
       "title": "PlaybackStatus"
     },
@@ -1143,7 +1338,13 @@
           "default": null
         }
       },
-      "required": ["ref", "title", "ownerName", "trackCount", "coverUrl"],
+      "required": [
+        "ref",
+        "title",
+        "ownerName",
+        "trackCount",
+        "coverUrl"
+      ],
       "type": "object",
       "title": "PlaylistSummary"
     },
@@ -1162,7 +1363,11 @@
           "type": "number"
         }
       },
-      "required": ["type", "t0", "serverTime"],
+      "required": [
+        "type",
+        "t0",
+        "serverTime"
+      ],
       "type": "object",
       "title": "Pong"
     },
@@ -1213,7 +1418,11 @@
           "default": null
         }
       },
-      "required": ["type", "clientMsgId", "trackIds"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "trackIds"
+      ],
       "type": "object",
       "title": "QueueAdd"
     },
@@ -1229,7 +1438,10 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId"],
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
       "type": "object",
       "title": "QueueClear"
     },
@@ -1249,7 +1461,12 @@
           "type": "integer"
         }
       },
-      "required": ["id", "track", "addedBy", "addedAtMs"],
+      "required": [
+        "id",
+        "track",
+        "addedBy",
+        "addedAtMs"
+      ],
       "type": "object",
       "title": "QueueItem"
     },
@@ -1265,7 +1482,10 @@
           "$ref": "#/$defs/QueueState"
         }
       },
-      "required": ["type", "queue"],
+      "required": [
+        "type",
+        "queue"
+      ],
       "type": "object",
       "title": "QueueMessage"
     },
@@ -1288,7 +1508,12 @@
           "type": "integer"
         }
       },
-      "required": ["type", "clientMsgId", "itemId", "toIndex"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId",
+        "toIndex"
+      ],
       "type": "object",
       "title": "QueueMove"
     },
@@ -1307,7 +1532,11 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId", "itemId"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId"
+      ],
       "type": "object",
       "title": "QueueRemove"
     },
@@ -1323,7 +1552,10 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId"],
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
       "type": "object",
       "title": "QueueShuffle"
     },
@@ -1332,7 +1564,16 @@
       "description": "Откуда добавлены треки — для события в ленте («37 треков из плейлиста X»).",
       "properties": {
         "kind": {
-          "enum": ["album", "playlist", "artist", "liked", "search", "link", "history", "undo"],
+          "enum": [
+            "album",
+            "playlist",
+            "artist",
+            "liked",
+            "search",
+            "link",
+            "history",
+            "undo"
+          ],
           "type": "string"
         },
         "title": {
@@ -1347,7 +1588,9 @@
           "default": null
         }
       },
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "type": "object",
       "title": "QueueSource-Input"
     },
@@ -1356,7 +1599,16 @@
       "description": "Откуда добавлены треки — для события в ленте («37 треков из плейлиста X»).",
       "properties": {
         "kind": {
-          "enum": ["album", "playlist", "artist", "liked", "search", "link", "history", "undo"],
+          "enum": [
+            "album",
+            "playlist",
+            "artist",
+            "liked",
+            "search",
+            "link",
+            "history",
+            "undo"
+          ],
           "type": "string"
         },
         "title": {
@@ -1371,7 +1623,10 @@
           "default": null
         }
       },
-      "required": ["kind", "title"],
+      "required": [
+        "kind",
+        "title"
+      ],
       "type": "object",
       "title": "QueueSource-Output"
     },
@@ -1413,7 +1668,13 @@
           "default": "off"
         }
       },
-      "required": ["version", "current", "upcoming", "history", "repeat"],
+      "required": [
+        "version",
+        "current",
+        "upcoming",
+        "history",
+        "repeat"
+      ],
       "type": "object",
       "title": "QueueState"
     },
@@ -1434,7 +1695,11 @@
           "type": "string"
         }
       },
-      "required": ["type", "clientMsgId", "emoji"],
+      "required": [
+        "type",
+        "clientMsgId",
+        "emoji"
+      ],
       "type": "object",
       "title": "ReactionSend"
     },
@@ -1451,14 +1716,65 @@
           "type": "integer"
         }
       },
-      "required": ["type", "version"],
+      "required": [
+        "type",
+        "version"
+      ],
       "type": "object",
       "title": "Ready"
     },
     "RepeatMode": {
-      "enum": ["off", "queue", "track"],
+      "enum": [
+        "off",
+        "queue",
+        "track"
+      ],
       "type": "string",
       "title": "RepeatMode"
+    },
+    "ResolveFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "message"
+      ],
+      "type": "object",
+      "title": "ResolveFailure"
+    },
+    "ResolveResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/TrackList"
+          },
+          "type": "array"
+        },
+        "failures": {
+          "items": {
+            "$ref": "#/$defs/ResolveFailure"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items",
+        "failures"
+      ],
+      "type": "object",
+      "title": "ResolveResponse"
     },
     "ResolvedEntity": {
       "additionalProperties": false,
@@ -1470,7 +1786,10 @@
           "type": "string"
         }
       },
-      "required": ["kind", "id"],
+      "required": [
+        "kind",
+        "id"
+      ],
       "type": "object",
       "title": "ResolvedEntity"
     },
@@ -1493,7 +1812,13 @@
           "type": "boolean"
         }
       },
-      "required": ["id", "slug", "name", "ownerId", "isOwner"],
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "ownerId",
+        "isOwner"
+      ],
       "type": "object",
       "title": "RoomDetails"
     },
@@ -1618,7 +1943,12 @@
           "type": "string"
         }
       },
-      "required": ["id", "slug", "name", "ownerId"],
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "ownerId"
+      ],
       "type": "object",
       "title": "RoomInfo"
     },
@@ -1634,7 +1964,10 @@
           "$ref": "#/$defs/RoomInfo"
         }
       },
-      "required": ["type", "room"],
+      "required": [
+        "type",
+        "room"
+      ],
       "type": "object",
       "title": "RoomInfoMessage"
     },
@@ -1667,7 +2000,13 @@
           "type": "integer"
         }
       },
-      "required": ["slug", "name", "isOwner", "lastJoinedAt", "online"],
+      "required": [
+        "slug",
+        "name",
+        "isOwner",
+        "lastJoinedAt",
+        "online"
+      ],
       "type": "object",
       "title": "RoomSummary"
     },
@@ -1714,7 +2053,13 @@
           "type": "array"
         }
       },
-      "required": ["best", "tracks", "albums", "artists", "playlists"],
+      "required": [
+        "best",
+        "tracks",
+        "albums",
+        "artists",
+        "playlists"
+      ],
       "type": "object",
       "title": "SearchResult"
     },
@@ -1779,7 +2124,9 @@
           "type": "string"
         }
       },
-      "required": ["slug"],
+      "required": [
+        "slug"
+      ],
       "type": "object",
       "title": "SlugResponse"
     },
@@ -1881,17 +2228,34 @@
           "default": null
         }
       },
-      "required": ["trackId", "mode", "url", "mirrors", "codec", "bitrate", "expiresAt"],
+      "required": [
+        "trackId",
+        "mode",
+        "url",
+        "mirrors",
+        "codec",
+        "bitrate",
+        "expiresAt"
+      ],
       "type": "object",
       "title": "StreamInfo"
     },
     "StreamMode": {
-      "enum": ["direct", "proxy"],
+      "enum": [
+        "direct",
+        "proxy"
+      ],
       "type": "string",
       "title": "StreamMode"
     },
     "SyncState": {
-      "enum": ["in_sync", "catching_up", "buffering", "unstable", "idle"],
+      "enum": [
+        "in_sync",
+        "catching_up",
+        "buffering",
+        "unstable",
+        "idle"
+      ],
       "type": "string",
       "title": "SyncState"
     },
@@ -1926,7 +2290,11 @@
           "type": "integer"
         }
       },
-      "required": ["medianMs", "p95Ms", "samples"],
+      "required": [
+        "medianMs",
+        "p95Ms",
+        "samples"
+      ],
       "type": "object",
       "title": "SyncStats"
     },
@@ -2056,7 +2424,15 @@
           "type": "array"
         }
       },
-      "required": ["kind", "id", "title", "subtitle", "coverUrl", "tracks", "albums"],
+      "required": [
+        "kind",
+        "id",
+        "title",
+        "subtitle",
+        "coverUrl",
+        "tracks",
+        "albums"
+      ],
       "type": "object",
       "title": "TrackList"
     }

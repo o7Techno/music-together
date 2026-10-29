@@ -1,6 +1,7 @@
 // Сессия комнаты: WebSocket + движок синхронизации + два аудиоэлемента + команды с ack/error.
 // Живёт вне React (один экземпляр на открытую комнату), UI читает состояние из roomStore.
 
+import { useAuthIssue } from '@/features/auth/authIssue'
 import { BrowserScheduler, HtmlAudioDeck, LatencyProbe, browserClock } from '@/player/browser'
 import { detectProfile } from '@/player/platform'
 import { SyncEngine } from '@/player/syncEngine'
@@ -43,6 +44,10 @@ const streamResolver: StreamResolver = {
       return { url: info.url, mirrors: info.mirrors }
     } catch (err) {
       if (err instanceof ApiError && [402, 404, 422].includes(err.status)) {
+        throw new TrackUnavailable(err.message)
+      }
+      if (err instanceof ApiError && err.status === 401) {
+        useAuthIssue.setState({ relogin: true })
         throw new TrackUnavailable(err.message)
       }
       throw err

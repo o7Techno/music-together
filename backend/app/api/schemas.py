@@ -17,6 +17,8 @@ class Me(ApiModel):
     avatar_url: str | None
     has_plus: bool
     provider: str
+    provider_connected: bool
+    """Токен Яндекса на месте (dev-пользователи — всегда). False → нужен повторный вход."""
 
     @classmethod
     def of(cls, user: User) -> Me:
@@ -27,6 +29,7 @@ class Me(ApiModel):
             avatar_url=user.avatar_url,
             has_plus=user.has_plus,
             provider=user.provider,
+            provider_connected=user.provider != "yandex" or user.token_enc is not None,
         )
 
 

@@ -17,9 +17,13 @@ from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.music import router as music_router
 from app.api.rooms import router as rooms_router
+from app.api.stream import router as stream_router
+from app.api.yandex_auth import router as yandex_auth_router
 from app.auth.crypto import TokenCipher
+from app.auth.yandex_login import DeviceFlowStore
+from app.auth.yandex_oauth import YandexAuth, YandexAuthClient
 from app.core.clock import Clock, SystemClock
-from app.core.config import Settings, get_settings
+from app.core.config import MusicProviderKind, Settings, get_settings
 from app.core.context import AppContext
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
@@ -27,6 +31,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.session import Database
 from app.providers.factory import ProviderFactory, YandexProviderBuilder
 from app.providers.fake import FAKE_MEDIA_DIR, FAKE_MEDIA_URL
+from app.providers.yandex_pool import YandexProviderPool
 from app.rooms.manager import RoomManager
 from app.rooms.timers import AsyncioTimers
 from app.ws.endpoint import router as ws_router
@@ -44,10 +49,14 @@ def build_context(settings: Settings, clock: Clock | None = None) -> AppContext:
     keys = settings.token_encryption_keys.get_secret_value()
     cipher = TokenCipher(keys) if keys else None
     yandex: YandexProviderBuilder | None = None
-    if cipher is not None:
-        from app.providers.yandex import YandexProviderPool  # noqa: PLC0415 — тяжёлый импорт по требованию
-
-        yandex = YandexProviderPool(settings, cipher)
+    yandex_auth: YandexAuth | None = None
+    if settings.music_provider is MusicProviderKind.YANDEX:
+        if cipher is None:
+            raise RuntimeError(
+                "MUSIC_PROVIDER=yandex требует TOKEN_ENCRYPTION_KEYS (см. .env.example)"
+            )
+        yandex_auth = YandexAuthClient(settings.ym_proxy_url)
+        yandex = YandexProviderPool(settings, cipher, db, yandex_auth)
     return AppContext(
         settings=settings,
         db=db,
@@ -58,6 +67,9 @@ def build_context(settings: Settings, clock: Clock | None = None) -> AppContext:
         cipher=cipher,
         search_limiter=RateLimiter(rate=3, burst=10, monotonic=clock.monotonic),
         stream_limiter=RateLimiter(rate=2, burst=10, monotonic=clock.monotonic),
+        login_limiter=RateLimiter(rate=0.2, burst=5, monotonic=clock.monotonic),
+        yandex_auth=yandex_auth,
+        device_flows=DeviceFlowStore(),
     )
 
 
@@ -127,6 +139,8 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(yandex_auth_router)
+    app.include_router(stream_router)
     app.include_router(rooms_router)
     app.include_router(music_router)
     app.include_router(ws_router)

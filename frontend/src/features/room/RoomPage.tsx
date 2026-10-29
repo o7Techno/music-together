@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
+import { AccountNotice } from '@/features/auth/AccountNotice'
 import { useMe } from '@/features/auth/useAuth'
 import { LoginCard } from '@/features/auth/LoginCard'
 import { QueuePanel } from '@/features/queue/QueuePanel'
@@ -118,6 +119,7 @@ function RoomLayout() {
         <InviteButton slug={room.slug} />
       </header>
 
+      <MeNotice />
       {!audioUnlocked && <UnlockBanner />}
 
       <div className="grid flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_360px]">
@@ -168,6 +170,11 @@ function ConnectionDot({ status }: { status: string }) {
       <span className="hidden sm:inline">{label}</span>
     </span>
   )
+}
+
+function MeNotice() {
+  const me = useMe()
+  return me.data ? <AccountNotice me={me.data} /> : null
 }
 
 function UnlockBanner() {

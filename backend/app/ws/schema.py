@@ -15,7 +15,9 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic.json_schema import JsonSchemaMode, models_json_schema
 
+from app.api.music import ResolveResponse
 from app.api.schemas import AuthConfig, Me, RoomDetails, RoomSummary, SlugResponse
+from app.api.yandex_auth import DevicePollResponse, DeviceStartResponse
 from app.providers.base import (
     AlbumSummary,
     PlaylistSummary,
@@ -48,6 +50,9 @@ SERVER_MODELS: list[type[BaseModel]] = [
     PlaylistSummary,
     StreamInfo,
     ResolvedEntity,
+    ResolveResponse,
+    DeviceStartResponse,
+    DevicePollResponse,
 ]
 
 

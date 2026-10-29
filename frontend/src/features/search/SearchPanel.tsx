@@ -1,13 +1,16 @@
-import { useQuery } from '@tanstack/react-query'
+import { type UseQueryResult, useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 
 import { useCommand } from '@/features/room/useCommand'
 import { ApiError, api } from '@/shared/api'
 import { artistNames, formatTime } from '@/shared/format'
-import type { Track } from '@/shared/protocol/generated'
+import { looksLikeYandexLink } from '@/shared/links'
+import type { ResolveResponse, Track } from '@/shared/protocol/generated'
 import { IconButton } from '@/shared/ui/Button'
 import { Cover } from '@/shared/ui/Cover'
 import { PlayNextIcon, PlusIcon, SearchIcon } from '@/shared/ui/icons'
+
+import { TrackListCard } from './TrackListCard'
 
 const DEBOUNCE_MS = 250
 
@@ -27,12 +30,20 @@ function useDebounced<T>(value: T, ms: number): T {
 export function SearchPanel() {
   const [query, setQuery] = useState('')
   const q = useDebounced(query.trim(), DEBOUNCE_MS)
+  const isLink = looksLikeYandexLink(q)
   const results = useQuery({
     queryKey: ['search', q],
     // TanStack Query отменяет устаревший запрос через signal.
     queryFn: ({ signal }) => api.search(q, signal),
-    enabled: q.length > 0,
+    enabled: q.length > 0 && !isLink,
     staleTime: 5 * 60_000,
+  })
+  const links = useQuery({
+    queryKey: ['resolve', q],
+    queryFn: ({ signal }) => api.resolveLinks(q, signal),
+    enabled: isLink,
+    staleTime: 5 * 60_000,
+    retry: false,
   })
   return (
     <section aria-label="Поиск" className="flex min-h-0 flex-col gap-3">
@@ -49,10 +60,11 @@ export function SearchPanel() {
           onChange={(e) => {
             setQuery(e.target.value)
           }}
-          placeholder="Трек, альбом, исполнитель…"
+          placeholder="Трек, исполнитель или ссылка Яндекс Музыки"
           className="focus-ring border-border bg-surface-2 h-11 w-full rounded-full border pr-4 pl-10"
         />
       </label>
+      {isLink && <LinkResults state={links} />}
       {results.isFetching && <p className="text-fg-subtle text-sm">Ищем…</p>}
       {results.error && (
         <p role="alert" className="text-bad text-sm">
@@ -68,6 +80,30 @@ export function SearchPanel() {
         ))}
       </ul>
     </section>
+  )
+}
+
+function LinkResults({ state }: { state: UseQueryResult<ResolveResponse> }) {
+  if (state.isFetching) return <p className="text-fg-subtle text-sm">Смотрим ссылку…</p>
+  if (state.error) {
+    return (
+      <p role="alert" className="text-bad text-sm">
+        {state.error instanceof ApiError ? state.error.message : 'Не удалось открыть ссылку.'}
+      </p>
+    )
+  }
+  if (!state.data) return null
+  return (
+    <div className="space-y-2">
+      {state.data.items.map((list) => (
+        <TrackListCard key={`${list.kind}:${list.id}`} list={list} />
+      ))}
+      {state.data.failures.map((f) => (
+        <p key={`${f.kind}:${f.id}`} className="text-warn text-sm">
+          {f.message}
+        </p>
+      ))}
+    </div>
   )
 }
 

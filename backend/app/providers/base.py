@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from app.core.errors import AppError
 from app.core.schema import ApiModel
+
+if TYPE_CHECKING:
+    from app.providers.yandex_links import ParsedLink
 
 
 class ArtistRef(ApiModel):
@@ -170,3 +173,5 @@ class MusicProvider(Protocol):
     async def get_liked_albums(self) -> list[AlbumSummary]: ...
 
     async def get_stream(self, track_id: str) -> StreamInfo: ...
+
+    async def resolve(self, link: ParsedLink) -> TrackList: ...

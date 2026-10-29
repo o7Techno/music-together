@@ -22,6 +22,7 @@ from app.providers.base import (
     TrackList,
     TrackUnavailableError,
 )
+from app.providers.yandex_links import ParsedLink
 
 FAKE_MEDIA_DIR = Path(__file__).resolve().parents[2] / "fake_media"
 FAKE_MEDIA_URL = "/media/fake"
@@ -194,6 +195,30 @@ class FakeProvider:
 
     async def get_liked_albums(self) -> list[AlbumSummary]:
         return [_album_summary("al2")]
+
+    async def resolve(self, link: ParsedLink) -> TrackList:
+        """Ссылки Яндекса с маленькими числовыми id отображаются на фейковый каталог:
+        `/track/3` → fake-3, `/album/1` → al1, `/artist/2` → a2, `/users/x/playlists/1` → fake:1.
+        Так e2e проверяет настоящий парсер ссылок без сети."""
+        match link.kind:
+            case EntityKind.TRACK:
+                track = TRACKS.get(f"fake-{link.id}")
+                if track is None:
+                    raise ProviderNotFoundError
+                return TrackList(
+                    kind=EntityKind.TRACK,
+                    id=track.id,
+                    title=track.title,
+                    subtitle=", ".join(a.name for a in track.artists),
+                    cover_url=track.cover_url,
+                    tracks=[track],
+                )
+            case EntityKind.ALBUM:
+                return await self.get_album(f"al{link.id}")
+            case EntityKind.ARTIST:
+                return await self.get_artist(f"a{link.id}")
+            case EntityKind.PLAYLIST:
+                return await self.get_playlist(f"fake:{link.id.rsplit(':', 1)[-1]}")
 
     async def get_stream(self, track_id: str) -> StreamInfo:
         track = TRACKS.get(track_id)

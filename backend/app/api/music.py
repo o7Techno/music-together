@@ -5,9 +5,19 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Query
+from pydantic import Field
 
 from app.api.deps import Provider, limit
-from app.providers.base import AlbumSummary, PlaylistSummary, SearchResult, StreamInfo, TrackList
+from app.core.errors import ValidationError
+from app.core.schema import ApiModel
+from app.providers.base import (
+    AlbumSummary,
+    PlaylistSummary,
+    ProviderError,
+    SearchResult,
+    TrackList,
+)
+from app.providers.yandex_links import extract_links
 
 router = APIRouter(prefix="/api", tags=["music"])
 
@@ -49,10 +59,36 @@ async def my_albums(provider: Provider) -> list[AlbumSummary]:
     return await provider.get_liked_albums()
 
 
-@router.get("/stream/{track_id}", dependencies=[limit("stream_limiter")])
-async def stream(track_id: str, provider: Provider) -> StreamInfo:
-    """Ссылка на аудио — только для запросившего пользователя, получена его токеном.
+class ResolveRequest(ApiModel):
+    text: str = Field(min_length=1, max_length=20_000)
+    """Одна или несколько ссылок (по одной на строку или вперемешку с текстом)."""
 
-    Ответ не кешируется ни на сервере, ни в браузере (заголовок ставит middleware для /api/stream).
-    """
-    return await provider.get_stream(track_id)
+
+class ResolveFailure(ApiModel):
+    kind: str
+    id: str
+    message: str
+
+
+class ResolveResponse(ApiModel):
+    items: list[TrackList]
+    failures: list[ResolveFailure]
+
+
+MAX_LINKS = 20
+
+
+@router.post("/resolve-link", dependencies=[limit("search_limiter")])
+async def resolve_link(body: ResolveRequest, provider: Provider) -> ResolveResponse:
+    """Понять, на что ссылки (трек/альбом/плейлист/артист), и вернуть их треки."""
+    links = extract_links(body.text, limit=MAX_LINKS)
+    if not links:
+        raise ValidationError("Не нашли ссылок Яндекс Музыки — проверьте, что ссылка полная.")
+    items: list[TrackList] = []
+    failures: list[ResolveFailure] = []
+    for link in links:
+        try:
+            items.append(await provider.resolve(link))
+        except ProviderError as e:
+            failures.append(ResolveFailure(kind=link.kind.value, id=link.id, message=e.message))
+    return ResolveResponse(items=items, failures=failures)

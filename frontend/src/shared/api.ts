@@ -3,8 +3,11 @@
 import type {
   AlbumSummary,
   AuthConfig,
+  DevicePollResponse,
+  DeviceStartResponse,
   Me,
   PlaylistSummary,
+  ResolveResponse,
   RoomDetails,
   RoomSummary,
   SearchResult,
@@ -62,6 +65,10 @@ export const api = {
   me: () => request<Me>('GET', '/api/auth/me'),
   devLogin: (name: string) => request<Me>('POST', '/api/auth/dev-login', { name }),
   logout: () => request<undefined>('POST', '/api/auth/logout'),
+  deviceStart: () => request<DeviceStartResponse>('POST', '/api/auth/device/start'),
+  devicePoll: (flowId: string) =>
+    request<DevicePollResponse>('POST', '/api/auth/device/poll', { flowId }),
+  tokenLogin: (token: string) => request<Me>('POST', '/api/auth/token-login', { token }),
 
   myRooms: () => request<RoomSummary[]>('GET', '/api/rooms'),
   createRoom: (name?: string) => request<RoomSummary>('POST', '/api/rooms', { name: name ?? null }),
@@ -86,6 +93,8 @@ export const api = {
   myPlaylists: () => request<PlaylistSummary[]>('GET', '/api/me/playlists'),
   myLiked: () => request<TrackList>('GET', '/api/me/liked'),
   myAlbums: () => request<AlbumSummary[]>('GET', '/api/me/albums'),
+  resolveLinks: (text: string, signal?: AbortSignal) =>
+    request<ResolveResponse>('POST', '/api/resolve-link', { text }, signal),
   stream: (trackId: string) =>
     request<StreamInfo>('GET', `/api/stream/${encodeURIComponent(trackId)}`),
 }

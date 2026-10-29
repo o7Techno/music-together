@@ -11,7 +11,7 @@ import json
 import socket
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from websockets.asyncio.client import ClientConnection, connect
 
 from app.core.config import Environment, MusicProviderKind, Settings
+from app.core.context import AppContext
 from app.db.models import Base
 from app.main import create_app
 
@@ -53,10 +54,10 @@ async def create_schema(db_path: Path) -> None:
 
 
 @contextmanager
-def live_server(settings: Settings):  # type: ignore[no-untyped-def]  # генератор-контекст
+def live_server(settings: Settings, ctx: AppContext | None = None) -> Iterator[str]:
     port = free_port()
     config = uvicorn.Config(
-        create_app(settings),
+        create_app(settings, ctx),
         host="127.0.0.1",
         port=port,
         log_level="warning",

@@ -122,6 +122,8 @@ export interface Protocol {
   CmdPrev?: CmdPrev
   CmdSeek?: CmdSeek
   CmdSetRepeat?: CmdSetRepeat
+  DevicePollResponse?: DevicePollResponse
+  DeviceStartResponse?: DeviceStartResponse
   DriftReport?: DriftReport
   EntityKind?: EntityKind
   ErrorMessage?: ErrorMessage
@@ -149,6 +151,8 @@ export interface Protocol {
   ReactionSend?: ReactionSend
   Ready?: Ready
   RepeatMode?: RepeatMode
+  ResolveFailure?: ResolveFailure
+  ResolveResponse?: ResolveResponse
   ResolvedEntity?: ResolvedEntity
   RoomDetails?: RoomDetails
   RoomEvent?: RoomEvent
@@ -461,6 +465,38 @@ export interface Closed {
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "DevicePollResponse".
+ */
+export interface DevicePollResponse {
+  status: 'pending' | 'ok' | 'expired'
+  me: Me | null
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "Me".
+ */
+export interface Me {
+  id: string
+  login: string
+  displayName: string
+  avatarUrl: string | null
+  hasPlus: boolean
+  provider: string
+  providerConnected: boolean
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "DeviceStartResponse".
+ */
+export interface DeviceStartResponse {
+  flowId: string
+  userCode: string
+  verificationUrl: string
+  expiresIn: number
+  interval: number
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "ErrorMessage".
  */
 export interface ErrorMessage {
@@ -502,18 +538,6 @@ export interface RoomEvent {
 export interface QueueSourceOutput {
   kind: 'album' | 'playlist' | 'artist' | 'liked' | 'search' | 'link' | 'history' | 'undo'
   title: string | null
-}
-/**
- * This interface was referenced by `Protocol`'s JSON-Schema
- * via the `definition` "Me".
- */
-export interface Me {
-  id: string
-  login: string
-  displayName: string
-  avatarUrl: string | null
-  hasPlus: boolean
-  provider: string
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -616,6 +640,38 @@ export interface QueueState {
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "ResolveFailure".
+ */
+export interface ResolveFailure {
+  kind: string
+  id: string
+  message: string
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "ResolveResponse".
+ */
+export interface ResolveResponse {
+  items: TrackList[]
+  failures: ResolveFailure[]
+}
+/**
+ * Набор треков сущности (альбом, плейлист, артист, «Мне нравится»).
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "TrackList".
+ */
+export interface TrackList {
+  kind: EntityKind | 'liked'
+  id: string
+  title: string
+  subtitle: string | null
+  coverUrl: string | null
+  tracks: Track[]
+  albums: AlbumSummary[]
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "ResolvedEntity".
  */
 export interface ResolvedEntity {
@@ -708,19 +764,4 @@ export interface StreamInfo {
   codec: string
   bitrate: number
   expiresAt: string | null
-}
-/**
- * Набор треков сущности (альбом, плейлист, артист, «Мне нравится»).
- *
- * This interface was referenced by `Protocol`'s JSON-Schema
- * via the `definition` "TrackList".
- */
-export interface TrackList {
-  kind: EntityKind | 'liked'
-  id: string
-  title: string
-  subtitle: string | null
-  coverUrl: string | null
-  tracks: Track[]
-  albums: AlbumSummary[]
 }
