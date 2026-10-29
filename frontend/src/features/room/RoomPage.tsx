@@ -5,7 +5,9 @@ import { AccountNotice } from '@/features/auth/AccountNotice'
 import { useMe } from '@/features/auth/useAuth'
 import { LoginCard } from '@/features/auth/LoginCard'
 import { QueuePanel } from '@/features/queue/QueuePanel'
-import { SearchPanel } from '@/features/search/SearchPanel'
+import { AddPanel } from '@/features/add/AddPanel'
+import { useAddNav } from '@/features/add/addNav'
+import { PasteDrop } from '@/features/add/PasteDrop'
 import { eventText, isToastWorthy } from '@/shared/format'
 import { CLOSE_FORBIDDEN, CLOSE_NOT_FOUND, CLOSE_UNAUTHORIZED } from '@/shared/roomSocket'
 import { Button } from '@/shared/ui/Button'
@@ -53,7 +55,21 @@ function Room({ slug }: { slug: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === 'k' || e.key === 'K' || e.key === 'л' || e.key === 'Л')
+      ) {
+        e.preventDefault()
+        focusSearch()
+        return
+      }
       if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key === '/' || e.key === '.') {
+        // «/» на русской раскладке — это «.» на той же клавише.
+        e.preventDefault()
+        focusSearch()
+        return
+      }
       if (e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') setDebug((v) => !v)
     }
     window.addEventListener('keydown', onKey)
@@ -63,11 +79,15 @@ function Room({ slug }: { slug: string }) {
   }, [])
 
   useToastsForOthers()
+  useEffect(() => {
+    useAddNav.getState().reset()
+  }, [slug])
 
   if (!session) return <FullScreenSpinner />
   return (
     <RoomContext.Provider value={session}>
       <RoomLayout />
+      <PasteDrop />
       {debug && (
         <DebugPanel
           onClose={() => {
@@ -77,6 +97,14 @@ function Room({ slug }: { slug: string }) {
       )}
     </RoomContext.Provider>
   )
+}
+
+function focusSearch(): void {
+  useAddNav.getState().setTab('search')
+  // Поле поиска всегда смонтировано (скрыто при других вкладках) — фокус после перерисовки.
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLInputElement>('[data-search-input]')?.focus()
+  })
 }
 
 /** Критичные действия других участников — коротким тостом. */
@@ -132,7 +160,7 @@ function RoomLayout() {
           <EventFeed />
         </div>
         <div className="bg-surface-1 min-h-0 rounded-2xl p-4">
-          <SearchPanel />
+          <AddPanel />
         </div>
       </div>
     </div>

@@ -699,13 +699,15 @@ class Room:
                 self._advance(user, natural_end=False)
             else:
                 self._publish_queue()
-            self._event(
-                EventKind.QUEUE_ADD,
-                user,
-                count=len(items),
-                title=items[0].track.title if len(items) == 1 else None,
-                source=source,
-            )
+            if source is None or source.kind != "undo":
+                # «Отменить удаление» — не новое добавление: в ленте не дублируем.
+                self._event(
+                    EventKind.QUEUE_ADD,
+                    user,
+                    count=len(items),
+                    title=items[0].track.title if len(items) == 1 else None,
+                    source=source,
+                )
             self._changed()
             self._out.send(conn_id, Ack(client_msg_id=client_msg_id))
 

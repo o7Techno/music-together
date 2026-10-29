@@ -1,14 +1,12 @@
-// Карточка набора треков (альбом, плейлист, артист, трек по ссылке): добавить всё одним действием.
+// Карточка набора треков по ссылке (трек, альбом, плейлист, артист): добавить одним действием.
 
+import { useAddNav } from '@/features/add/addNav'
+import { type SourceKind, queuedTrackIds, useAddTracks } from '@/features/add/useAddTracks'
 import { useRoomStore } from '@/features/room/roomStore'
-import { useCommand } from '@/features/room/useCommand'
 import { plural } from '@/shared/format'
 import type { TrackList } from '@/shared/protocol/generated'
 import { Button } from '@/shared/ui/Button'
 import { Cover } from '@/shared/ui/Cover'
-import { toast } from '@/shared/ui/Toaster'
-
-export const MAX_BATCH = 500
 
 const KIND_LABEL: Record<string, string> = {
   track: 'Трек',
@@ -18,49 +16,21 @@ const KIND_LABEL: Record<string, string> = {
   liked: 'Мне нравится',
 }
 
-export type SourceKind = 'album' | 'playlist' | 'artist' | 'liked' | 'link' | 'search'
-
-export function useAddTracks() {
-  const send = useCommand()
-  return async (
-    trackIds: string[],
-    opts: {
-      position?: 'end' | 'next' | 'now'
-      source: { kind: SourceKind; title?: string | null }
-    },
-  ): Promise<boolean> => {
-    if (trackIds.length === 0) return false
-    if (trackIds.length > MAX_BATCH) {
-      toast.info(
-        `За раз можно добавить до ${String(MAX_BATCH)} треков — добавим первые ${String(MAX_BATCH)}.`,
-      )
-    }
-    return send({
-      type: 'queue.add',
-      trackIds: trackIds.slice(0, MAX_BATCH),
-      position: opts.position ?? 'end',
-      source: { kind: opts.source.kind, title: opts.source.title ?? null },
-    })
-  }
-}
-
-export function TrackListCard({
-  list,
-  sourceKind = 'link',
-}: {
-  list: TrackList
-  sourceKind?: SourceKind
-}) {
+export function TrackListCard({ list, onAdded }: { list: TrackList; onAdded?: () => void }) {
   const add = useAddTracks()
-  const queue = useRoomStore((s) => s.queue)
+  const open = useAddNav((s) => s.open)
+  // Подписка на очередь — чтобы метка «уже в очереди» обновлялась.
+  useRoomStore((s) => s.queue?.version)
   const available = list.tracks.filter((t) => t.available)
   const ids = available.map((t) => t.id)
-  const inQueue = new Set([
-    queue?.current?.track.id,
-    ...(queue?.upcoming.map((i) => i.track.id) ?? []),
-  ])
-  const duplicates = ids.filter((id) => inQueue.has(id)).length
-  const source = { kind: list.kind === 'track' ? 'link' : sourceKind, title: list.title } as const
+  const queued = queuedTrackIds()
+  const duplicates = ids.filter((id) => queued.has(id)).length
+  const kind: SourceKind =
+    list.kind === 'track' ? 'link' : list.kind === 'liked' ? 'liked' : list.kind
+  const source = { kind, title: list.title }
+  const run = async (position: 'end' | 'next'): Promise<void> => {
+    if (await add(ids, { position, source })) onAdded?.()
+  }
   return (
     <div
       className="border-border bg-surface-2 flex gap-3 rounded-xl border p-3"
@@ -79,6 +49,9 @@ export function TrackListCard({
                 ` · ${String(list.tracks.length - available.length)} недоступно`}
             </p>
           )}
+          {list.kind === 'track' && available.length === 0 && (
+            <p className="text-warn text-xs">Трек недоступен для вашего аккаунта</p>
+          )}
           {duplicates > 0 && (
             <p className="text-warn text-xs">
               {duplicates === ids.length ? 'Уже в очереди' : `${String(duplicates)} уже в очереди`}
@@ -90,17 +63,29 @@ export function TrackListCard({
             size="sm"
             variant="primary"
             disabled={ids.length === 0}
-            onClick={() => void add(ids, { source })}
+            onClick={() => void run('end')}
           >
             {list.kind === 'track' ? 'В очередь' : 'Добавить все'}
           </Button>
-          <Button
-            size="sm"
-            disabled={ids.length === 0}
-            onClick={() => void add(ids, { position: 'next', source })}
-          >
+          <Button size="sm" disabled={ids.length === 0} onClick={() => void run('next')}>
             Играть следующим
           </Button>
+          {list.kind !== 'track' && list.kind !== 'liked' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                open({
+                  type: list.kind as 'album' | 'playlist' | 'artist',
+                  id: list.id,
+                  title: list.title,
+                })
+                onAdded?.()
+              }}
+            >
+              Выбрать треки
+            </Button>
+          )}
         </div>
       </div>
     </div>

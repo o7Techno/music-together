@@ -56,6 +56,20 @@ export function resetRoomStore(): void {
   useRoomStore.setState({ ...initial }, true)
 }
 
+/**
+ * Оптимистичное изменение очереди: применяется сразу, сервер подтвердит новой версией.
+ * Возвращает откат — вызвать, если команда отклонена (и сервер ещё не прислал новую версию).
+ */
+export function optimisticQueue(mutate: (q: QueueState) => QueueState): () => void {
+  const before = useRoomStore.getState().queue
+  if (!before) return () => undefined
+  useRoomStore.setState({ queue: mutate(before) })
+  return () => {
+    const now = useRoomStore.getState().queue
+    if (now && now.version === before.version) useRoomStore.setState({ queue: before })
+  }
+}
+
 /** Применить сообщение сервера к состоянию UI. Версии защищают от устаревших данных. */
 export function applyServerMessage(msg: ServerMessage): void {
   const set = useRoomStore.setState
