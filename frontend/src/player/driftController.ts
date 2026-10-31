@@ -102,7 +102,7 @@ export class DriftController {
     if (abs >= p.hardSeekMs) {
       // Seek не помогает — повторяем редко: частая перемотка слышна как непрерывные лаги.
       const interval =
-        this.seekFailures > p.maxSeekFailures ? UNSTABLE_SEEK_INTERVAL_MS : p.minSeekIntervalMs
+        this.seekFailures > p.maxSeekFailures + 1 ? UNSTABLE_SEEK_INTERVAL_MS : p.minSeekIntervalMs
       if (nowMs - this.lastSeekAt >= interval) {
         this.lastSeekAt = nowMs
         this.pendingSeekCheck = true
