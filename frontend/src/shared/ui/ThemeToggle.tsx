@@ -1,27 +1,18 @@
-import { type ThemeChoice, useTheme } from '@/shared/theme'
-
-const NEXT: Record<ThemeChoice, ThemeChoice> = { dark: 'light', light: 'system', system: 'dark' }
-const LABEL: Record<ThemeChoice, string> = {
-  dark: 'Тема: тёмная',
-  light: 'Тема: светлая',
-  system: 'Тема: как в системе',
-}
-const ICON: Record<ThemeChoice, string> = { dark: '☾', light: '☀', system: '◐' }
+import { useTheme } from '@/shared/theme'
 
 export function ThemeToggle() {
-  const choice = useTheme((s) => s.choice)
-  const set = useTheme((s) => s.set)
+  const theme = useTheme((s) => s.theme)
+  const toggle = useTheme((s) => s.toggle)
+  const label = theme === 'dark' ? 'Тема: тёмная' : 'Тема: светлая'
   return (
     <button
       type="button"
-      onClick={() => {
-        set(NEXT[choice])
-      }}
-      aria-label={`${LABEL[choice]}. Переключить`}
-      title={LABEL[choice]}
+      onClick={toggle}
+      aria-label={`${label}. Переключить`}
+      title={label}
       className="focus-ring text-fg-muted hover:text-fg hover:bg-surface-3 flex size-9 items-center justify-center rounded-full text-lg"
     >
-      <span aria-hidden="true">{ICON[choice]}</span>
+      <span aria-hidden="true">{theme === 'dark' ? '☾' : '☀'}</span>
     </button>
   )
 }

@@ -1,27 +1,19 @@
-// Тема: тёмная по умолчанию, светлая по выбору; «как в системе» — по prefers-color-scheme.
+// Тема: тёмная по умолчанию, светлая по выбору (SPEC §8). Выбор запоминается в localStorage.
 
 import { create } from 'zustand'
 
-export type ThemeChoice = 'dark' | 'light' | 'system'
+export type Theme = 'dark' | 'light'
 const KEY = 'mt.theme'
 
-function read(): ThemeChoice {
+function read(): Theme {
   try {
-    const v = localStorage.getItem(KEY)
-    if (v === 'dark' || v === 'light' || v === 'system') return v
+    return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
   } catch {
-    /* без localStorage — тема по умолчанию */
+    return 'dark'
   }
-  return 'dark'
 }
 
-function resolve(choice: ThemeChoice): 'dark' | 'light' {
-  if (choice !== 'system') return choice
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
-}
-
-export function applyTheme(choice: ThemeChoice): void {
-  const theme = resolve(choice)
+export function applyTheme(theme: Theme): void {
   const root = document.documentElement
   root.classList.toggle('light', theme === 'light')
   root.classList.toggle('dark', theme === 'dark')
@@ -30,23 +22,21 @@ export function applyTheme(choice: ThemeChoice): void {
     ?.setAttribute('content', theme === 'light' ? '#f6f6f8' : '#0b0b0d')
 }
 
-export const useTheme = create<{ choice: ThemeChoice; set: (c: ThemeChoice) => void }>((set) => ({
-  choice: read(),
-  set: (choice) => {
+export const useTheme = create<{ theme: Theme; toggle: () => void }>((set, get) => ({
+  theme: read(),
+  toggle: () => {
+    const theme = get().theme === 'dark' ? 'light' : 'dark'
     try {
-      localStorage.setItem(KEY, choice)
+      localStorage.setItem(KEY, theme)
     } catch {
       /* без сохранения */
     }
-    applyTheme(choice)
-    set({ choice })
+    applyTheme(theme)
+    set({ theme })
   },
 }))
 
 /** Вызвать до первого рендера, чтобы не мигала тема. */
 export function initTheme(): void {
-  applyTheme(useTheme.getState().choice)
-  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => {
-    if (useTheme.getState().choice === 'system') applyTheme('system')
-  })
+  applyTheme(useTheme.getState().theme)
 }

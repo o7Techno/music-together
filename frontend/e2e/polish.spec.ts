@@ -82,13 +82,31 @@ test('hotkeys and Media Session control the room', async ({ browser }) => {
   expect(artist).toBe('Щелчки и Ко')
 })
 
-test('theme toggle switches to light and is remembered', async ({ browser }) => {
+test('theme toggle switches between dark and light in one click and is remembered', async ({
+  browser,
+}) => {
   const page = await newUser(browser, 'Аня')
-  await expect(page.locator('html')).toHaveClass(/dark/)
+  const html = page.locator('html')
+  await expect(html).toHaveClass(/dark/)
   await page.getByRole('button', { name: /Тема: тёмная/ }).click()
-  await expect(page.locator('html')).toHaveClass(/light/)
+  await expect(html).toHaveClass(/light/)
   await page.reload()
-  await expect(page.locator('html')).toHaveClass(/light/)
+  await expect(html).toHaveClass(/light/)
+  // Второй клик сразу возвращает тёмную: промежуточных состояний нет.
+  await page.getByRole('button', { name: /Тема: светлая/ }).click()
+  await expect(html).toHaveClass(/dark/)
+  await expect(page.getByRole('button', { name: /Тема: тёмная/ })).toBeVisible()
+})
+
+test('login screen is centered', async ({ page }) => {
+  await page.goto('/')
+  const viewport = page.viewportSize()
+  const title = await page.getByRole('heading', { name: 'Слушаем вместе' }).boundingBox()
+  const card = await page.getByRole('heading', { name: 'Вход' }).locator('../..').boundingBox()
+  if (!viewport || !title || !card) throw new Error('no boxes')
+  const center = viewport.width / 2
+  expect(Math.abs(title.x + title.width / 2 - center)).toBeLessThanOrEqual(2)
+  expect(Math.abs(card.x + card.width / 2 - center)).toBeLessThanOrEqual(2)
 })
 
 test('player controls stay inside the player column', async ({ browser }) => {

@@ -16,6 +16,20 @@ import { useLogout, useMe } from './useAuth'
 export function HomePage() {
   const me = useMe()
   if (me.isPending) return <FullScreenSpinner />
+  if (!me.data) {
+    return (
+      <main className="relative flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-10">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+        <header className="text-center">
+          <h1 className="text-3xl font-bold tracking-tight">Слушаем вместе</h1>
+          <p className="text-fg-muted">Яндекс Музыка с друзьями — синхронно, секунда в секунду</p>
+        </header>
+        <LoginCard />
+      </main>
+    )
+  }
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-4 py-10 sm:px-6">
       <header className="flex items-center justify-between gap-4">
@@ -25,11 +39,11 @@ export function HomePage() {
         </div>
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          {me.data && <UserBadge me={me.data} />}
+          <UserBadge me={me.data} />
         </div>
       </header>
-      {me.data && <AccountNotice me={me.data} />}
-      {me.data ? <Rooms me={me.data} /> : <LoginCard />}
+      <AccountNotice me={me.data} />
+      <Rooms me={me.data} />
     </main>
   )
 }
