@@ -349,6 +349,45 @@ describe('SyncEngine', () => {
     })
   })
 
+  describe('audio unlock', () => {
+    it('unlocks without a gesture when the browser allows it', async () => {
+      const env = setup()
+      for (const deck of env.decks) deck.autoplayAllowed = true
+      await expect(env.engine.tryAutoUnlock()).resolves.toBe(true)
+      expect(env.engine.audioUnlocked).toBe(true)
+      expect(env.of('client_status').at(-1)?.audioUnlocked).toBe(true)
+    })
+
+    it('stays locked if any deck is refused', async () => {
+      const env = setup()
+      env.decks[0].autoplayAllowed = true
+      await expect(env.engine.tryAutoUnlock()).resolves.toBe(false)
+      expect(env.engine.audioUnlocked).toBe(false)
+    })
+
+    it('restarts a track the system stopped while the app was in the background', async () => {
+      const env = setup()
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      expect(env.decks[0].paused).toBe(false)
+      env.decks[0].pause()
+      env.engine.resumeIfStopped()
+      await env.scheduler.advance(1000)
+      expect(env.decks[0].paused).toBe(false)
+    })
+
+    it('does not start anything when resuming while locked or paused', async () => {
+      const env = setup()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() }), false)
+      env.engine.resumeIfStopped()
+      await env.scheduler.advance(500)
+      expect(env.decks[0].paused).toBe(true)
+    })
+  })
+
   it('on playback error tries a mirror, then fetches a fresh link', async () => {
     const env = setup()
     env.resolver.mirrors = ['https://mirror.test']

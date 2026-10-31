@@ -3,11 +3,17 @@
 
 import { useEffect } from 'react'
 
+import { isIOS } from '@/player/platform'
 import { coverSrc } from '@/shared/ui/Cover'
 
 import { useRoomSession } from './RoomContext'
 import { useRoomStore } from './roomStore'
 import { usePlaybackActions } from './usePlaybackActions'
+
+/** iOS показывает на экране блокировки либо перемотку на 10 с, либо «следующий / предыдущий». */
+export function usesTrackButtonsOnly(info: { userAgent: string; maxTouchPoints: number }): boolean {
+  return isIOS(info)
+}
 
 export function useMediaSession(): void {
   const session = useRoomSession()
@@ -18,6 +24,24 @@ export function useMediaSession(): void {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     const ms = navigator.mediaSession
+    const seekSteps: [MediaSessionAction, MediaSessionActionHandler][] = usesTrackButtonsOnly(
+      navigator,
+    )
+      ? []
+      : [
+          [
+            'seekforward',
+            (d) => {
+              actions.seek(session.engine.expectedPositionMs() + (d.seekOffset ?? 10) * 1000)
+            },
+          ],
+          [
+            'seekbackward',
+            (d) => {
+              actions.seek(session.engine.expectedPositionMs() - (d.seekOffset ?? 10) * 1000)
+            },
+          ],
+        ]
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
       ['play', actions.play],
       ['pause', actions.pause],
@@ -29,18 +53,7 @@ export function useMediaSession(): void {
           if (d.seekTime !== undefined) actions.seek(d.seekTime * 1000)
         },
       ],
-      [
-        'seekforward',
-        (d) => {
-          actions.seek(session.engine.expectedPositionMs() + (d.seekOffset ?? 10) * 1000)
-        },
-      ],
-      [
-        'seekbackward',
-        (d) => {
-          actions.seek(session.engine.expectedPositionMs() - (d.seekOffset ?? 10) * 1000)
-        },
-      ],
+      ...seekSteps,
     ]
     for (const [action, handler] of handlers) {
       try {

@@ -123,3 +123,30 @@ test('player controls stay inside the player column', async ({ browser }) => {
     )
   }
 })
+
+test('queue rows keep the same columns, including the first one', async ({ browser }) => {
+  const page = await newUser(browser, 'Аня')
+  const slug = await createRoom(page)
+  await enterRoom(page, slug)
+  await addTrack(page, 'минута', 'Минута ровно')
+  await addTrack(page, 'сорок', 'Сорок пять')
+  await addTrack(page, 'короткий', 'Короткий')
+  const rows = page.getByTestId('queue').getByRole('listitem')
+  await expect(rows).toHaveCount(2)
+  const lefts = await page
+    .getByTestId('queue')
+    .locator('span[title^="Добавил"]')
+    .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().left))
+  expect(lefts).toHaveLength(2)
+  expect(lefts[0]).toBeCloseTo(lefts[1] ?? 0, 0)
+})
+
+test('room reports the audio as unlocked without a dedicated button', async ({ browser }) => {
+  const page = await newUser(browser, 'Аня')
+  await createRoom(page)
+  // Chromium в e2e запущен с разрешённым автовоспроизведением: проверка сработает сама.
+  await expect
+    .poll(() => page.evaluate(() => window.__roomSession?.engine.audioUnlocked))
+    .toBe(true)
+  await expect(page.getByTestId('unlock')).toBeHidden()
+})

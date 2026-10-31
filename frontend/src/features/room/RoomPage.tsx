@@ -144,6 +144,7 @@ function RoomLayout() {
   const status = useRoomStore((s) => s.status)
   const terminal = useRoomStore((s) => s.terminalCode)
   const audioUnlocked = useRoomStore((s) => s.audioUnlocked)
+  const hasTrack = useRoomStore((s) => Boolean(s.playback?.trackId))
   const desktop = useIsDesktop()
   const [tab, setTab] = useState<MobileTab>('queue')
   const [playerOpen, setPlayerOpen] = useState(false)
@@ -177,7 +178,7 @@ function RoomLayout() {
 
       <MeNotice />
       <PlaylistDialog />
-      {!audioUnlocked && <UnlockBanner />}
+      {!audioUnlocked && hasTrack && <UnlockHint />}
 
       <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)_380px]">
         <aside
@@ -335,22 +336,20 @@ function MeNotice() {
   return me.data ? <AccountNotice me={me.data} /> : null
 }
 
-function UnlockBanner() {
+/** Звук включает любое нажатие, поэтому здесь только короткая подсказка, а не большая плашка. */
+function UnlockHint() {
   const session = useRoomSession()
   return (
-    <div className="border-accent/40 bg-accent/10 flex flex-col items-center gap-3 rounded-2xl border p-4 text-center sm:flex-row sm:text-left">
-      <p className="flex-1">Браузер не даёт сайтам включать звук без вашего разрешения.</p>
-      <Button
-        variant="primary"
-        size="lg"
-        onClick={() => {
-          session.unlockAudio()
-        }}
-        data-testid="unlock"
-      >
-        Включить звук
-      </Button>
-    </div>
+    <button
+      type="button"
+      onClick={() => {
+        session.unlockAudio()
+      }}
+      data-testid="unlock"
+      className="focus-ring border-accent/40 bg-accent/10 self-center rounded-full border px-4 py-1.5 text-sm"
+    >
+      🔇 Нажмите, чтобы включить звук
+    </button>
   )
 }
 

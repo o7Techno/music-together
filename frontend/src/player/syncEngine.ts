@@ -617,6 +617,25 @@ export class SyncEngine {
 
   // ── Разблокировка звука ─────────────────────────────────────────────────────
 
+  /** Если браузер разрешает звук без жеста (установленное приложение, частый сайт) — не просим. */
+  async tryAutoUnlock(): Promise<boolean> {
+    const results = await Promise.all(this.d.decks.map((deck) => deck.probeAutoplay()))
+    if (!results.every(Boolean)) return false
+    this.audioUnlocked = true
+    this.sendStatus()
+    if (this.state) this.applyState(this.state, true)
+    this.emit()
+    return true
+  }
+
+  /** Вкладка снова на экране: система могла остановить звук, пока приложение было в фоне. */
+  resumeIfStopped(): void {
+    this.tick()
+    if (this.state?.status === 'playing' && this.audioUnlocked && this.active.paused) {
+      this.applyState(this.state, true)
+    }
+  }
+
   /** Вызывать синхронно из обработчика клика/тапа (политики автовоспроизведения). */
   async unlock(): Promise<void> {
     await Promise.all(this.d.decks.map((deck) => deck.unlock()))

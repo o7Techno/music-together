@@ -8,7 +8,14 @@ test('mobile room: bottom tabs, mini player, full player sheet', async ({ page }
   await page.getByRole('button', { name: 'Войти' }).click()
   await page.getByRole('button', { name: 'Создать комнату' }).click()
   await page.waitForURL(/\/r\//)
-  await page.getByTestId('unlock').click()
+  await expect(page.getByTestId('mini-player')).toBeVisible()
+  // В пустой комнате плашки о звуке нет, а любое нажатие включает его.
+  await expect(page.getByTestId('unlock')).toBeHidden()
+  await page.getByTestId('mini-player').getByText('Ничего не играет').click()
+  await expect
+    .poll(() => page.evaluate(() => window.__roomSession?.engine.audioUnlocked))
+    .toBe(true)
+  await page.getByRole('button', { name: 'Свернуть плеер' }).tap()
 
   const nav = page.getByRole('navigation', { name: 'Разделы комнаты' })
   await expect(nav).toBeVisible()

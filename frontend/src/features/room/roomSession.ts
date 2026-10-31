@@ -13,6 +13,8 @@ import { RoomSocket, roomSocketUrl } from '@/shared/roomSocket'
 import { applyServerMessage, resetRoomStore, useRoomStore } from './roomStore'
 
 const COMMAND_TIMEOUT_MS = 10_000
+// Активация жестом: на iOS считаются touchend и click, но не touchstart и pointerdown.
+const GESTURE_EVENTS = ['click', 'touchend', 'pointerup', 'keydown'] as const
 
 type CommandMessage = Extract<ClientMessage, { clientMsgId: string }>
 type CommandInput = CommandMessage extends infer M
@@ -62,6 +64,7 @@ export class RoomSession {
   private readonly latency = new LatencyProbe()
   private readonly pending = new Map<string, Pending>()
   private seq = 0
+  private disposed = false
   private readonly cleanups: (() => void)[] = []
   private errorListeners = new Set<(err: CommandError) => void>()
 
@@ -121,13 +124,22 @@ export class RoomSession {
       this.socket.reconnectNow()
     }
     const onVisible = (): void => {
-      if (document.visibilityState === 'visible') this.engine.tick()
+      if (document.visibilityState === 'visible') this.engine.resumeIfStopped()
+    }
+    // Любое нажатие в комнате включает звук: отдельная кнопка не нужна. Слушаем постоянно, потому
+    // что система может снова запретить звук, например после звонка или возврата из фона.
+    const onGesture = (): void => {
+      if (!this.engine.audioUnlocked) this.unlockAudio()
     }
     window.addEventListener('online', onOnline)
     document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onVisible)
+    for (const type of GESTURE_EVENTS) document.addEventListener(type, onGesture, true)
     this.cleanups.push(() => {
       window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onVisible)
+      for (const type of GESTURE_EVENTS) document.removeEventListener(type, onGesture, true)
     })
     window.__syncProbe = () => this.engine.probe()
     window.__roomSession = this
@@ -135,10 +147,17 @@ export class RoomSession {
 
   start(): void {
     this.engine.start()
-    this.socket.connect()
+    // Проверка идёт до подключения: на деках ещё нет треков, которые она могла бы сбить.
+    void this.engine
+      .tryAutoUnlock()
+      .catch(() => false)
+      .finally(() => {
+        if (!this.disposed) this.socket.connect()
+      })
   }
 
   dispose(): void {
+    this.disposed = true
     this.socket.close()
     this.engine.stop()
     for (const deck of this.decks) deck.unload()
