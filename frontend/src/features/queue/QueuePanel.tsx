@@ -354,17 +354,17 @@ function SortableRow({
         >
           <PlayIcon size={16} />
         </IconButton>
-        {index > 0 && (
-          <IconButton
-            size="sm"
-            label={`«${item.track.title}» — следующим`}
-            onClick={() => {
-              actions.move(item.id, index, 0)
-            }}
-          >
-            <PlayNextIcon size={16} />
-          </IconButton>
-        )}
+        {/* У первой строки кнопка скрыта, но место занимает: иначе колонки строк разъедутся. */}
+        <IconButton
+          size="sm"
+          className={index === 0 ? 'invisible' : ''}
+          label={`«${item.track.title}» — следующим`}
+          onClick={() => {
+            actions.move(item.id, index, 0)
+          }}
+        >
+          <PlayNextIcon size={16} />
+        </IconButton>
         <IconButton
           size="sm"
           label={`Убрать «${item.track.title}» из очереди`}

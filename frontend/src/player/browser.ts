@@ -64,6 +64,7 @@ function silentWavUrl(): string {
 }
 
 let silentUrl: string | null = null
+const AUTOPLAY_PROBE_TIMEOUT_MS = 500
 
 type PitchElement = HTMLAudioElement & {
   mozPreservesPitch?: boolean
@@ -168,26 +169,51 @@ export class HtmlAudioDeck implements AudioDeck {
     }
   }
 
-  async unlock(): Promise<void> {
-    // iOS разблокирует конкретный элемент: проигрываем тишину на нём самом, затем возвращаем трек.
+  private async playSilence(): Promise<boolean> {
+    silentUrl ??= silentWavUrl()
     const el = this.el
-    const restoreSrc = this.currentSrc
-    const restoreTime = el.currentTime
     const wasMuted = el.muted
-    el.muted = true
-    if (!restoreSrc) {
-      silentUrl ??= silentWavUrl()
-      el.src = silentUrl
-    }
+    // Со звуком: разрешение на беззвучное воспроизведение на обычное не распространяется, и iOS
+    // отказывал бы при первом настоящем play(). Слышно ничего не будет: файл — тишина.
+    el.muted = false
+    el.src = silentUrl
     try {
       await el.play()
+      return true
     } catch {
-      // Если браузер всё равно отказал — движок узнает об этом при первом play().
+      // Если браузер отказал — движок узнает об этом при первом настоящем play().
+      return false
+    } finally {
+      el.pause()
+      el.muted = wasMuted
     }
-    el.pause()
-    el.muted = wasMuted
-    if (restoreSrc) el.currentTime = restoreTime
-    else el.removeAttribute('src')
+  }
+
+  async unlock(): Promise<void> {
+    // iOS разблокирует конкретный элемент: проигрываем тишину на нём самом, затем возвращаем трек.
+    // До первого await всё выполняется синхронно — внутри жеста пользователя.
+    const restoreSrc = this.currentSrc
+    await this.playSilence()
+    if (restoreSrc && this.currentSrc === restoreSrc) {
+      this.el.src = restoreSrc
+      this.el.load()
+    } else if (!this.currentSrc) {
+      this.el.removeAttribute('src')
+    }
+  }
+
+  async probeAutoplay(): Promise<boolean> {
+    if (this.currentSrc) return false
+    const allowed = await Promise.race([
+      this.playSilence(),
+      new Promise<boolean>((resolve) => {
+        window.setTimeout(() => {
+          resolve(false)
+        }, AUTOPLAY_PROBE_TIMEOUT_MS)
+      }),
+    ])
+    if (!this.currentSrc) this.el.removeAttribute('src')
+    return allowed
   }
 }
 

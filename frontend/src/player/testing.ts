@@ -100,6 +100,7 @@ export class FakeDeck implements AudioDeck {
   playCalls: number[] = []
   seekCalls: number[] = []
   failNextPlay = false
+  autoplayAllowed = false
 
   private pos = 0
   private baseAt = 0
@@ -233,6 +234,10 @@ export class FakeDeck implements AudioDeck {
 
   unlock(): Promise<void> {
     return Promise.resolve()
+  }
+
+  probeAutoplay(): Promise<boolean> {
+    return Promise.resolve(this.autoplayAllowed)
   }
 }
 

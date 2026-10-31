@@ -42,6 +42,8 @@ export interface AudioDeck {
   on(event: DeckEvent, cb: () => void): () => void
   /** Разблокировка автовоспроизведения — вызывать из обработчика жеста пользователя. */
   unlock(): Promise<void>
+  /** Разрешает ли браузер звук без жеста. Вызывать, пока на деке нет трека. */
+  probeAutoplay(): Promise<boolean>
 }
 
 export interface StreamSource {

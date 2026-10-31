@@ -22,8 +22,15 @@ export async function createRoom(page: Page): Promise<string> {
 
 export async function enterRoom(page: Page, slug: string): Promise<void> {
   if (!page.url().endsWith(`/r/${slug}`)) await page.goto(`/r/${slug}`)
-  await page.getByTestId('unlock').click()
-  await expect(page.getByTestId('unlock')).toBeHidden()
+  await unlockAudio(page)
+}
+
+/** Звук включает любое нажатие. В Chromium с флагом автовоспроизведения он включён сразу. */
+export async function unlockAudio(page: Page): Promise<void> {
+  await page.getByRole('heading', { level: 1 }).first().click()
+  await expect
+    .poll(() => page.evaluate(() => window.__roomSession?.engine.audioUnlocked))
+    .toBe(true)
 }
 
 export async function addTrack(page: Page, query: string, title: string): Promise<void> {
