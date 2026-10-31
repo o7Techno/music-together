@@ -131,7 +131,10 @@ export class RoomSession {
       this.socket.reconnectNow()
     }
     const onVisible = (): void => {
-      if (document.visibilityState !== 'visible') return
+      if (document.visibilityState !== 'visible') {
+        this.engine.noteHidden()
+        return
+      }
       this.socket.reconnectNow()
       this.dropIfSilent()
       this.engine.resumeIfStopped()

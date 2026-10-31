@@ -6,7 +6,7 @@ import type {
   WaveView,
 } from '@/shared/protocol/generated'
 
-import { BACKGROUND_HARD_SEEK_MS, SyncEngine } from './syncEngine'
+import { BACKGROUND_HARD_SEEK_MS, RESUME_SETTLE_MS, SyncEngine } from './syncEngine'
 import { FakeClock, FakeDeck, type FakeDeckOptions, FakeResolver, FakeScheduler } from './testing'
 
 const SERVER_OFFSET = 5_000
@@ -453,6 +453,96 @@ describe('SyncEngine', () => {
       env.decks[0].emit('waiting')
       await env.scheduler.advance(10_500)
       expect(env.resolver.calls.length).toBeGreaterThan(calls)
+    })
+  })
+
+  describe('iPhone: returning to the app', () => {
+    const inBackground = async () => {
+      let locked = false
+      const env = setup({}, { background: () => locked })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      locked = true
+      env.engine.noteHidden()
+      await env.scheduler.advance(1000)
+      locked = false
+      return env
+    }
+
+    it('leaves the audio alone while settling, then fixes the drift with one seek', async () => {
+      const env = await inBackground()
+      env.decks[0].seek(env.decks[0].currentTimeMs + 600) // расхождение, накопленное в фоне
+      const seeks = env.decks[0].seekCalls.length
+      env.engine.resumeIfStopped()
+      await env.scheduler.advance(RESUME_SETTLE_MS - 100)
+      expect(env.decks[0].seekCalls.length).toBe(seeks)
+      expect(env.decks[0].playbackRate).toBe(1)
+      expect(env.engine.sync).not.toBe('catching_up')
+
+      await env.scheduler.advance(1000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1)
+      await env.scheduler.advance(4000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1)
+      expect(Math.abs(env.engine.probe().driftMs ?? Infinity)).toBeLessThan(100)
+    })
+
+    it('does not seek on return when the drift is small', async () => {
+      const env = await inBackground()
+      const seeks = env.decks[0].seekCalls.length
+      env.engine.resumeIfStopped()
+      await env.scheduler.advance(RESUME_SETTLE_MS + 1000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks)
+    })
+
+    it('keeps the old clock estimate when the clock did not actually jump', async () => {
+      const env = await inBackground()
+      env.engine.resumeIfStopped()
+      expect(env.engine.clockSync.calibrated).toBe(true)
+    })
+
+    it('does not restart a playing track when a reconnect brings the same state', async () => {
+      const env = await inBackground()
+      const state = env.engine.state
+      if (!state) throw new Error('no state')
+      const plays = env.decks[0].playCalls.length
+      const seeks = env.decks[0].seekCalls.length
+      env.engine.handleMessage({
+        type: 'snapshot',
+        serverTime: env.serverNow(),
+        selfUserId: 'u',
+        room: {
+          id: 'r',
+          slug: 's',
+          name: 'n',
+          ownerId: 'u',
+          settings: { waveMix: 'manual_first', announceLikes: true },
+        },
+        playback: state,
+        queue: queueWith('t2'),
+        members: [],
+        stats: { medianMs: null, p95Ms: null, samples: 0 },
+        events: [],
+        chat: [],
+        wave: {
+          version: 0,
+          waveId: null,
+          status: 'off',
+          mode: null,
+          ownerId: null,
+          ownerName: null,
+          ownerAway: false,
+          seedLabel: null,
+          settings: [],
+          next: [],
+          nextTrackId: null,
+        },
+        trackLikes: { queueItemId: null, userIds: [] },
+      })
+      await env.scheduler.advance(500)
+      expect(env.decks[0].playCalls.length).toBe(plays)
+      expect(env.decks[0].seekCalls.length).toBe(seeks)
     })
   })
 
