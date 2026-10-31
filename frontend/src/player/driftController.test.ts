@@ -107,4 +107,22 @@ describe('detectProfile', () => {
   it('honours explicit override', () => {
     expect(detectProfile({ userAgent: 'x', maxTouchPoints: 0, override: 'ios' }).name).toBe('ios')
   })
+
+  it('seeks rarely once repeated seeks keep failing', () => {
+    const c = new DriftController()
+    let now = 0
+    // Каждая перемотка не помогает: дрейф остаётся большим.
+    c.update(5000, 10_000, now)
+    now += 2000
+    c.update(5000, 10_000, now)
+    for (let i = 0; i < 3; i++) {
+      now += 2000
+      c.update(5000, 10_000, now)
+    }
+    expect(c.seekFailureCount).toBeGreaterThan(3)
+    now += 2000
+    expect(c.update(5000, 10_000, now).kind).not.toBe('seek')
+    now += 30_000
+    expect(c.update(5000, 10_000, now).kind).toBe('seek')
+  })
 })

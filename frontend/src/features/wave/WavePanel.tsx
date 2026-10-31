@@ -18,8 +18,8 @@ const GROUP_TITLE: Record<string, string> = {
   language: 'Язык',
   mood_energy: 'Настроение',
 }
+// Настроение выбирается в настройках волны: второй такой же список только путает (D-045).
 const KIND_TITLE: Record<string, string> = {
-  mood: 'Настроение',
   activity: 'Занятие',
   genre: 'Жанр',
 }
@@ -210,7 +210,7 @@ function Stations({
   stations: WaveStation[]
   onPick: (seed: WaveSeed) => void
 }) {
-  const kinds = ['mood', 'activity', 'genre'].filter((k) => stations.some((s) => s.kind === k))
+  const kinds = ['activity', 'genre'].filter((k) => stations.some((s) => s.kind === k))
   return (
     <>
       {kinds.map((kind) => (

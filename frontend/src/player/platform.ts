@@ -11,7 +11,8 @@ export const IOS_PROFILE: DriftProfile = {
   deadZoneMs: 40,
   exitZoneMs: 15,
   maxRateDelta: 0.02,
-  hardSeekMs: 400,
+  // 400 мс срабатывало от сбоя оценки часов после блокировки экрана и слышалось как лаги.
+  hardSeekMs: 800,
 }
 
 export const ANDROID_PROFILE: DriftProfile = {

@@ -125,10 +125,10 @@ test('another member replaces the wave after confirming, anyone can stop it', as
 test('wave by seed shows what it is based on', async ({ browser }) => {
   const [anna] = await pair(browser)
   await anna.getByRole('tab', { name: 'Волна' }).click()
-  await anna.getByRole('combobox', { name: 'Волна: Настроение' }).selectOption({ label: 'Весёлое' })
+  await anna.getByRole('combobox', { name: 'Волна: Занятие' }).selectOption({ label: 'Спорт' })
   await currentWaveTrack(anna)
-  await expect(anna.getByTestId('track-source')).toHaveText('Волна по: Весёлое')
-  await expect(anna.getByTestId('wave-status')).toContainText('Волна по: Весёлое')
+  await expect(anna.getByTestId('track-source')).toHaveText('Волна по: Спорт')
+  await expect(anna.getByTestId('wave-status')).toContainText('Волна по: Спорт')
 })
 
 test('repeat button skips queue mode while the wave is on', async ({ browser }) => {

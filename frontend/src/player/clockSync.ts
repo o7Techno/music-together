@@ -15,6 +15,8 @@ export interface ClockSyncOptions {
   bestCount: number
   smoothing: number
   jumpThresholdMs: number
+  /** Замеры старше этого забываем: малый RTT иначе держал бы устаревшую оценку минутами. */
+  maxSampleAgeMs: number
 }
 
 const DEFAULTS: ClockSyncOptions = {
@@ -22,6 +24,7 @@ const DEFAULTS: ClockSyncOptions = {
   bestCount: 3,
   smoothing: 0.3,
   jumpThresholdMs: 250,
+  maxSampleAgeMs: 120_000,
 }
 
 function median(values: number[]): number {
@@ -50,6 +53,7 @@ export class ClockSync {
     const offsetMs = serverTime - (t0 + rttMs / 2)
     this.samples.push({ rttMs, offsetMs, atMs: t1 })
     if (this.samples.length > this.opts.windowSize) this.samples.shift()
+    this.samples = this.samples.filter((s) => t1 - s.atMs <= this.opts.maxSampleAgeMs)
     this.update()
   }
 

@@ -6,7 +6,7 @@ import type {
   WaveView,
 } from '@/shared/protocol/generated'
 
-import { SyncEngine } from './syncEngine'
+import { BACKGROUND_HARD_SEEK_MS, SyncEngine } from './syncEngine'
 import { FakeClock, FakeDeck, type FakeDeckOptions, FakeResolver, FakeScheduler } from './testing'
 
 const SERVER_OFFSET = 5_000
@@ -52,7 +52,10 @@ function queueWith(nextTrackId: string): QueueState {
   }
 }
 
-function setup(deckOpts: FakeDeckOptions = {}) {
+function setup(
+  deckOpts: FakeDeckOptions = {},
+  engineOpts: { wallNow?: (clock: FakeClock) => number; background?: () => boolean } = {},
+) {
   const clock = new FakeClock()
   const scheduler = new FakeScheduler(clock)
   const decks = [
@@ -73,7 +76,16 @@ function setup(deckOpts: FakeDeckOptions = {}) {
       }, 2 * ONE_WAY_MS)
     }
   }
-  engine = new SyncEngine({ clock, scheduler, decks, resolver, send })
+  const { wallNow, background } = engineOpts
+  engine = new SyncEngine({
+    clock,
+    scheduler,
+    decks,
+    resolver,
+    send,
+    background,
+    wallNow: wallNow && (() => wallNow(clock)),
+  })
   engine.start()
   engine.onConnected()
   const of = <T extends ClientMessage['type']>(type: T) =>
@@ -345,6 +357,102 @@ describe('SyncEngine', () => {
       expect(env.decks[0].paused).toBe(before)
       expect(env.decks[0].currentTimeMs).toBe(seeks)
       expect(env.engine.state?.version).toBe(1)
+    })
+  })
+
+  describe('iPhone: sleep, lock screen, stopped audio', () => {
+    const playing = async (background: () => boolean = () => false) => {
+      const env = setup({}, { background })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      return env
+    }
+
+    it('recalibrates after the device slept instead of seeking on a stale offset', async () => {
+      let sleptMs = 0
+      const env = setup({}, { wallNow: (clock) => clock.t + sleptMs })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      const pings = env.of('ping').length
+      const seeks = env.decks[0].seekCalls.length
+      sleptMs = 60_000 // performance.now стоял, настенные часы ушли вперёд
+      await env.scheduler.advance(500)
+      expect(env.of('ping').length).toBeGreaterThan(pings)
+      expect(env.decks[0].seekCalls.length).toBe(seeks)
+    })
+
+    it('does not correct drift while the screen is locked unless it is large', async () => {
+      let locked = false
+      const env = await playing(() => locked)
+      locked = true
+      const seeks = env.decks[0].seekCalls.length
+      env.decks[0].seek(env.decks[0].currentTimeMs + BACKGROUND_HARD_SEEK_MS / 2)
+      await env.scheduler.advance(3000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1) // только наш ручной
+      expect(env.decks[0].playbackRate).toBe(1)
+
+      env.decks[0].seek(env.decks[0].currentTimeMs + BACKGROUND_HARD_SEEK_MS * 2)
+      await env.scheduler.advance(1000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 3)
+      // Повторная перемотка — не раньше чем через 30 с.
+      env.decks[0].seek(env.decks[0].currentTimeMs + BACKGROUND_HARD_SEEK_MS * 2)
+      await env.scheduler.advance(5000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 4)
+    })
+
+    it('changes track on the playing element when the screen is locked', async () => {
+      let locked = false
+      const env = await playing(() => locked)
+      env.engine.handleMessage({ type: 'queue', queue: queueWith('t2') })
+      locked = true
+      env.engine.applyState(
+        ps({ version: 2, queueItemId: 'q2', trackId: 't2', status: 'loading' }),
+        false,
+      )
+      await env.scheduler.advance(400)
+      expect(env.decks[0].src).toContain('t2')
+      expect(env.decks[1].src).toBeNull()
+      expect(env.decks[0].paused).toBe(false)
+      expect(env.of('ready').at(-1)).toEqual({ type: 'ready', version: 2 })
+    })
+
+    it('does not preload onto the second element while locked', async () => {
+      const env = await playing(() => true)
+      env.engine.handleMessage({ type: 'queue', queue: queueWith('t2') })
+      env.engine.applyState(
+        ps({
+          version: 2,
+          status: 'playing',
+          durationMs: 10_000,
+          anchorServerMs: env.serverNow(),
+        }),
+        false,
+      )
+      await env.scheduler.advance(1000)
+      expect(env.resolver.calls).not.toContain('t2')
+    })
+
+    it('resumes audio stopped by the system, but not a pause from the lock screen', async () => {
+      const env = await playing()
+      env.decks[0].pause()
+      await env.scheduler.advance(3500)
+      expect(env.decks[0].paused).toBe(false)
+
+      env.engine.pauseLocally()
+      await env.scheduler.advance(5000)
+      expect(env.decks[0].paused).toBe(true)
+    })
+
+    it('reloads a track stuck in buffering', async () => {
+      const env = await playing()
+      const calls = env.resolver.calls.length
+      env.decks[0].emit('waiting')
+      await env.scheduler.advance(10_500)
+      expect(env.resolver.calls.length).toBeGreaterThan(calls)
     })
   })
 

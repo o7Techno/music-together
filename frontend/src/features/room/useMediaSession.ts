@@ -42,15 +42,45 @@ export function useMediaSession(): void {
             },
           ],
         ]
+    const current = (): string | null => useRoomStore.getState().playback?.queueItemId ?? null
     const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
-      ['play', actions.play],
-      ['pause', actions.pause],
-      ['nexttrack', actions.next],
-      ['previoustrack', actions.prev],
+      [
+        'play',
+        () => {
+          session.engine.playLocally()
+          session.mediaCommand(() => ({ type: 'cmd.play' }))
+        },
+      ],
+      [
+        'pause',
+        () => {
+          session.engine.pauseLocally()
+          navigator.mediaSession.playbackState = 'paused'
+          session.mediaCommand(() => ({ type: 'cmd.pause' }))
+        },
+      ],
+      [
+        'nexttrack',
+        () => {
+          session.mediaCommand(() => ({ type: 'cmd.next', expectedQueueItemId: current() }))
+        },
+      ],
+      [
+        'previoustrack',
+        () => {
+          session.mediaCommand(() => ({ type: 'cmd.prev', expectedQueueItemId: current() }))
+        },
+      ],
       [
         'seekto',
         (d) => {
-          if (d.seekTime !== undefined) actions.seek(d.seekTime * 1000)
+          const seconds = d.seekTime
+          if (seconds === undefined) return
+          session.mediaCommand(() => ({
+            type: 'cmd.seek',
+            positionMs: Math.max(0, Math.round(seconds * 1000)),
+            expectedQueueItemId: current(),
+          }))
         },
       ],
       ...seekSteps,
