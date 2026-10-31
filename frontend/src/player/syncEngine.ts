@@ -51,6 +51,10 @@ const BACKGROUND_SEEK_INTERVAL_MS = 30_000
 const RESUME_RETRY_MS = 3000
 /** Буферизация дольше этого — ссылка или соединение умерли: загружаем заново. */
 const STALL_RELOAD_MS = 10_000
+/** После возврата из фона первые замеры часов неточны: столько времени звук не трогаем. */
+export const RESUME_SETTLE_MS = 2500
+/** Расхождение, накопленное в фоне, выправляем одной перемоткой, а не долгой подстройкой темпа. */
+export const RESUME_SEEK_MS = 150
 
 export interface SyncEngineDeps {
   clock: Clock
@@ -155,6 +159,9 @@ export class SyncEngine {
   private lastBackgroundSeekAt = -Infinity
   private lastResumeAt = -Infinity
   private stoppedSince: number | null = null
+  private wasInBackground = false
+  private settleUntil = -Infinity
+  private resumeCheckPending = false
   private bufferingSince: number | null = null
   /** Пауза нажата на экране блокировки: команда ещё идёт на сервер, звук не возобновлять. */
   private pausedLocally = false
@@ -233,7 +240,8 @@ export class SyncEngine {
         }
         this.queue = msg.queue
         this.wave = msg.wave
-        this.applyState(msg.playback, true)
+        // Соединение переподключилось, а ничего не изменилось: играющий трек не перезапускаем.
+        if (!this.isPlayingExactly(msg.playback)) this.applyState(msg.playback, true)
         this.sendStatus(true)
         break
       case 'playback':
@@ -248,6 +256,19 @@ export class SyncEngine {
       default:
         break
     }
+  }
+
+  private isPlayingExactly(state: PlaybackState): boolean {
+    const prev = this.state
+    return (
+      prev !== null &&
+      prev.version === state.version &&
+      prev.queueItemId === state.queueItemId &&
+      state.status === 'playing' &&
+      this.started &&
+      !this.active.paused &&
+      this.deckTracks.get(this.active.id)?.trackId === state.trackId
+    )
   }
 
   private pingBurst(count: number): void {
@@ -605,8 +626,15 @@ export class SyncEngine {
       this.startLatencyMs = Math.min(200, Math.max(0, this.startLatencyMs - m.drift * 0.5))
     }
     const state = this.state
-    if (!this.clockSync.calibrated) {
-      // Часы только что сбились и меряются заново: нынешний дрейф — артефакт, не трогаем звук.
+    if (!this.clockSync.calibrated || now < this.settleUntil) {
+      // Часы меряются заново: нынешний дрейф — артефакт, а частая коррекция слышна как лаги.
+      if (Math.abs(this.active.playbackRate - 1) > 0.0005) this.active.playbackRate = 1
+    } else if (this.resumeCheckPending && !this.d.background()) {
+      this.resumeCheckPending = false
+      if (Math.abs(m.drift) >= RESUME_SEEK_MS) {
+        this.active.seek(m.expected + this.controller.seekLatencyMs)
+        this.controller.noteSeek(now)
+      }
     } else if (this.d.background()) {
       this.correctInBackground(m, now)
     } else if (state && state.durationMs - m.expected > 300) {
@@ -652,11 +680,14 @@ export class SyncEngine {
     if (!last) return
     const localDelta = local - last.local
     const wallDelta = wall - last.wall
-    if (Math.abs(wallDelta - localDelta) > CLOCK_JUMP_MS || localDelta > TICK_GAP_MS) {
+    if (Math.abs(wallDelta - localDelta) > CLOCK_JUMP_MS) {
       this.d.logger.debug('clock jump, recalibrating', { localDelta, wallDelta })
       this.clockSync.resetWindow()
       this.controller.reset()
       this.pingBurst(CALIBRATION_PINGS)
+    } else if (localDelta > TICK_GAP_MS) {
+      // Таймеры стояли, но часы не сбились: оценка годна, просто обновляем её.
+      this.pingBurst(RECALIBRATION_PINGS)
     }
   }
 
@@ -717,6 +748,7 @@ export class SyncEngine {
     let next: SyncState
     const state = this.state
     if (state?.status !== 'playing' || !this.audioUnlocked || this.trackUnavailable) next = 'idle'
+    else if (this.d.clock.now() < this.settleUntil || this.resumeCheckPending) return
     else if (this.controller.unstable) next = 'unstable'
     else if (this.buffering) next = 'buffering'
     else {
@@ -756,10 +788,19 @@ export class SyncEngine {
   }
 
   /** Вкладка снова на экране: система могла остановить звук, пока приложение было в фоне. */
+  noteHidden(): void {
+    this.wasInBackground = this.d.background()
+  }
+
   resumeIfStopped(): void {
-    // Пока страница спала, часы могли разойтись незаметно для тика: меряем заново в любом случае.
-    this.clockSync.resetWindow()
     this.pingBurst(CALIBRATION_PINGS)
+    if (this.wasInBackground) {
+      // Выжидаем точных замеров часов и выправляем накопленное в фоне один раз.
+      this.wasInBackground = false
+      this.settleUntil = this.d.clock.now() + RESUME_SETTLE_MS
+      this.resumeCheckPending = true
+      this.controller.reset()
+    }
     this.tick()
     if (this.state?.status === 'playing' && this.audioUnlocked && this.active.paused) {
       this.applyState(this.state, true)

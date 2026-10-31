@@ -208,7 +208,7 @@ function RoomLayout() {
       </div>
 
       {!desktop && (
-        <div className="fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed inset-x-0 bottom-0 z-30">
           <MiniPlayer
             onExpand={() => {
               setPlayerOpen(true)
@@ -216,7 +216,7 @@ function RoomLayout() {
           />
           <nav
             aria-label="Разделы комнаты"
-            className="bg-surface-1 border-border grid grid-cols-4 border-t"
+            className="bg-surface-1 border-border grid grid-cols-4 border-t pb-[max(0px,calc(env(safe-area-inset-bottom)-0.75rem))]"
           >
             {MOBILE_TABS.map((t) => (
               <button
