@@ -6,6 +6,8 @@
     uv run python ../scripts/spike_wave.py read        # станции, настройки, сессии, фидбек
     uv run python ../scripts/spike_wave.py collection  # лайк/дизлайк с откатом, временный плейлист
     uv run python ../scripts/spike_wave.py session-age # жива ли сессия, созданная в `read`
+    uv run python ../scripts/spike_wave.py skip-limit  # лимит пропусков на инкогнито-сессии
+    uv run python ../scripts/spike_wave.py provider    # код YandexProvider на настоящем API
 
 Токен — из YM_TOKEN или `.env` в корне репозитория; не печатается и не пишется в отчёт.
 В `collection` меняется только то, что сам спайк создал или сразу откатывает: выбираются треки вне
@@ -32,6 +34,10 @@ from yandex_music.utils.difference import Difference
 from yandex_music.utils.request_async import Request
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
+
+from app.providers.base import ProviderError  # noqa: E402 — путь к backend добавлен строкой выше
+
 OUT = ROOT / "scripts" / ".spike-out"
 ENV_FILE = ROOT / ".env"
 WAVE = "user:onyourwave"
@@ -615,9 +621,99 @@ async def cmd_skip_limit(spike: Spike) -> None:
     spike.save("wave-skip-limit.json")
 
 
+async def cmd_provider(spike: Spike) -> None:
+    """Прогон методов YandexProvider: инкогнито-сессия, откат лайка, временный плейлист."""
+    from app.core.ratelimit import RateLimiter  # noqa: PLC0415 — нужен только этой команде
+    from app.providers.base import WaveFeedback, WaveFeedbackKind  # noqa: PLC0415
+    from app.providers.yandex import TTLCache, YandexProvider  # noqa: PLC0415
+
+    c = spike.client
+    uid = str(c.account_uid)
+    provider = YandexProvider(
+        user_key="spike",
+        uid=uid,
+        token=load_token(),
+        proxy_url=None,
+        public_cache=TTLCache(),
+        limiter=RateLimiter(8, 25, time.monotonic),
+    )
+
+    options = await provider.get_wave_options()
+    spike.note(
+        "wave_options",
+        groups={g.key: [o.label for o in g.options] for g in options.settings},
+        stations=dict(Counter(s.kind for s in options.stations)),
+        default_marked=[o.seed for g in options.settings for o in g.options if o.default],
+    )
+
+    batch = await provider.start_wave([WAVE, "settingDiversity:discover"], [], incognito=True)
+    ids = [t.id for t in batch.tracks]
+    spike.note("start_wave", size=len(ids), has_album=sum(1 for t in batch.tracks if t.album_id))
+    more = await provider.next_wave_tracks(batch.session_id, ids)
+    spike.note("next_wave", size=len(more.tracks), repeats=len(set(ids) & {t.id for t in more.tracks}))
+    now = int(time.time() * 1000)
+    await provider.send_wave_feedback(
+        batch.session_id,
+        [
+            WaveFeedback(kind=WaveFeedbackKind.RADIO_STARTED, at_ms=now, batch_id=batch.batch_id),
+            WaveFeedback(
+                kind=WaveFeedbackKind.TRACK_STARTED, at_ms=now, track_id=ids[0], batch_id=batch.batch_id
+            ),
+            WaveFeedback(
+                kind=WaveFeedbackKind.SKIP,
+                at_ms=now,
+                track_id=ids[0],
+                played_s=3.5,
+                batch_id=batch.batch_id,
+            ),
+        ],
+    )
+    spike.note("feedback", sent=True)
+    stream = await provider.get_stream(ids[0])
+    spike.note("stream", codec=stream.codec, mirrors=len(stream.mirrors))
+
+    before = await provider.get_liked_track_ids()
+    free = [t for t in [*batch.tracks, *more.tracks] if t.id not in before and t.album_id]
+    target = free[0].id
+    await provider.like_track(target)
+    spike.note("like", visible=target in await provider.get_liked_track_ids())
+    await provider.unlike_track(target)
+    spike.note("unlike", restored=await provider.get_liked_track_ids() == before)
+
+    playlist = await provider.create_playlist(TEMP_PLAYLIST)
+    spike.note("create", editable=playlist.editable, url=bool(playlist.external_url))
+    try:
+        added = await provider.add_to_playlist(playlist.ref, [target], allow_duplicate=False)
+        spike.note("add", count=added.track_count)
+        try:
+            await provider.add_to_playlist(playlist.ref, [target], allow_duplicate=False)
+            spike.note("duplicate", detected=False)
+        except ProviderError as e:
+            spike.note("duplicate", detected=e.code == "duplicate")
+        many = await provider.add_to_playlist(
+            playlist.ref, [t.id for t in free[1:4]], allow_duplicate=False
+        )
+        spike.note("add_many", count=many.track_count)
+        removed = await provider.remove_from_playlist(playlist.ref, target)
+        spike.note("remove", count=removed.track_count)
+        listed = await provider.get_user_playlists()
+        spike.note(
+            "listed", found=[p.editable for p in listed if p.ref == playlist.ref]
+        )
+    finally:
+        kind = int(playlist.ref.split(":")[1])
+        deleted = await spike.step(
+            "cleanup", lambda: c.users_playlists_delete(kind, user_id=c.account_uid)
+        )
+        spike.note("cleanup", deleted=deleted)
+    spike.save("wave-provider.json")
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["read", "collection", "session-age", "skip-limit"])
+    parser.add_argument(
+        "command", choices=["read", "collection", "session-age", "skip-limit", "provider"]
+    )
     args = parser.parse_args()
     client = ClientAsync(load_token(), request=Request(timeout=15), report_unknown_fields=False)
     await client.init()
@@ -632,6 +728,8 @@ async def main() -> None:
             await cmd_session_age(spike)
         case "skip-limit":
             await cmd_skip_limit(spike)
+        case "provider":
+            await cmd_provider(spike)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 // Горячие клавиши плеера (SPEC §4.5): пробел — пауза, ←/→ — ±10 с, Shift+→ — следующий,
-// Shift+← — предыдущий. Не срабатывают в полях ввода и на кнопках (там пробел — нажатие).
+// Shift+← — предыдущий, L — лайк. Не срабатывают в полях ввода и на кнопках (там пробел — нажатие).
 
 import { useEffect } from 'react'
+
+import { useToggleLike } from '@/features/collection/useLikes'
 
 import { useRoomSession } from './RoomContext'
 import { useRoomStore } from './roomStore'
@@ -19,6 +21,7 @@ function isTyping(target: EventTarget | null): boolean {
 export function usePlayerHotkeys(): void {
   const session = useRoomSession()
   const actions = usePlaybackActions()
+  const toggleLike = useToggleLike()
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return
@@ -35,6 +38,15 @@ export function usePlayerHotkeys(): void {
             actions.seek(session.engine.expectedPositionMs() + SEEK_STEP_MS)
           }
           break
+        case 'KeyL': {
+          // По коду клавиши: так работает и в русской раскладке.
+          const trackId = playback?.trackId
+          if (trackId) {
+            e.preventDefault()
+            toggleLike(trackId)
+          }
+          break
+        }
         case 'ArrowLeft':
           e.preventDefault()
           if (e.shiftKey) actions.prev()
@@ -48,5 +60,5 @@ export function usePlayerHotkeys(): void {
     return () => {
       window.removeEventListener('keydown', onKey)
     }
-  }, [session, actions])
+  }, [session, actions, toggleLike])
 }

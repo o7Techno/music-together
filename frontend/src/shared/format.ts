@@ -70,10 +70,49 @@ export function eventText(e: RoomEvent): string {
       return `${who} переименовал(а) комнату в «${e.title ?? ''}»`
     case 'kicked':
       return `${who} убрал(а) из комнаты: ${e.title ?? ''}`
+    case 'wave_started':
+      return e.title ? `${who} включил(а) волну по: ${e.title}` : `${who} включил(а) свою волну`
+    case 'wave_replaced':
+      return e.title
+        ? `${who} заменил(а) волну на волну по: ${e.title}`
+        : `${who} заменил(а) волну на свою`
+    case 'wave_stopped':
+      return waveStopText(e, who)
+    case 'wave_unavailable':
+      return 'Волна временно недоступна — пробуем снова'
+    case 'wave_resumed':
+      return 'Волна снова играет'
+    case 'track_liked':
+      return `${who} лайкнул(а) «${e.title ?? ''}»`
+  }
+}
+
+function waveStopText(e: RoomEvent, who: string): string {
+  switch (e.reason) {
+    case 'owner_away':
+      return 'Волна остановлена: владелец вышел из комнаты'
+    case 'owner_gone':
+      return 'Волна остановлена: владелец больше не в комнате'
+    case 'auth':
+      return 'Волна остановлена: нужен повторный вход в Яндекс Музыку'
+    default:
+      return `${who} остановил(а) волну`
   }
 }
 
 /** Критичные действия дублируются тостом (SPEC §4.5). */
 export function isToastWorthy(e: RoomEvent): boolean {
-  return ['pause', 'play', 'seek', 'next', 'prev', 'play_item', 'queue_clear'].includes(e.kind)
+  return [
+    'pause',
+    'play',
+    'seek',
+    'next',
+    'prev',
+    'play_item',
+    'queue_clear',
+    'wave_started',
+    'wave_replaced',
+    'wave_stopped',
+    'wave_unavailable',
+  ].includes(e.kind)
 }

@@ -7,6 +7,7 @@ import { type KeyboardEvent, useEffect, useEffectEvent, useMemo, useRef, useStat
 import { useAddNav } from '@/features/add/addNav'
 import { SkeletonRows } from '@/features/add/EntityView'
 import { SECTION_TITLES, type SearchRow, moveActive, searchRows } from '@/features/add/searchRows'
+import { TrackActions } from '@/features/collection/TrackActions'
 import { useAddTracks } from '@/features/add/useAddTracks'
 import { ApiError, api } from '@/shared/api'
 import { artistNames, formatTime } from '@/shared/format'
@@ -232,6 +233,7 @@ function ResultRow({
         onMouseEnter={onHover}
       >
         <TrackInfo track={row.track} />
+        <TrackActions track={row.track} />
         <IconButton
           size="sm"
           label={`Играть «${row.track.title}» следующим`}

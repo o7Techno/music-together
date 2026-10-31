@@ -10,6 +10,7 @@ import type {
   QueueState,
   ServerMessage,
   SyncState,
+  WaveView,
 } from '@/shared/protocol/generated'
 
 import { ClockSync } from './clockSync'
@@ -108,6 +109,7 @@ export class SyncEngine {
 
   state: PlaybackState | null = null
   queue: QueueState | null = null
+  wave: WaveView | null = null
   audioUnlocked = false
   trackUnavailable = false
   sync: SyncState = 'idle'
@@ -206,6 +208,7 @@ export class SyncEngine {
           this.clockSync.resetWindow()
         }
         this.queue = msg.queue
+        this.wave = msg.wave
         this.applyState(msg.playback, true)
         this.sendStatus(true)
         break
@@ -214,6 +217,9 @@ export class SyncEngine {
         break
       case 'queue':
         if (!this.queue || msg.queue.version >= this.queue.version) this.queue = msg.queue
+        break
+      case 'wave':
+        if (!this.wave || msg.wave.version >= this.wave.version) this.wave = msg.wave
         break
       default:
         break
@@ -445,13 +451,18 @@ export class SyncEngine {
     }
   }
 
+  /** Что заиграет следующим. При волне решает сервер: режим «через один» здесь не повторяем. */
+  private nextTrackId(): string | null {
+    if (this.wave && this.wave.status !== 'off') return this.wave.nextTrackId
+    return this.queue?.upcoming[0]?.track.id ?? null
+  }
+
   private maybePreload(): void {
     const state = this.state
-    const next = this.queue?.upcoming[0]
-    if (state?.status !== 'playing' || !next || next.track.id === state.trackId) return
+    const trackId = this.nextTrackId()
+    if (state?.status !== 'playing' || !trackId || trackId === state.trackId) return
     const remaining = state.durationMs - this.expectedPositionMs()
     if (remaining > PRELOAD_BEFORE_END_MS) return
-    const trackId = next.track.id
     if (this.preloading === trackId || this.deckTracks.get(this.spare.id)?.trackId === trackId) {
       return
     }

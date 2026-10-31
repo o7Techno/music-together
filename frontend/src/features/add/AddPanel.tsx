@@ -1,6 +1,7 @@
-// Панель «Добавить»: вкладки «Поиск» / «Мои плейлисты» / «По ссылке» + просмотр сущностей.
+// Панель «Добавить»: вкладки «Поиск» / «Волна» / «Мои плейлисты» / «По ссылке» + просмотр сущностей.
 
 import { SearchPanel } from '@/features/search/SearchPanel'
+import { WavePanel } from '@/features/wave/WavePanel'
 
 import { type AddTab, useAddNav } from './addNav'
 import { EntityView } from './EntityView'
@@ -9,6 +10,7 @@ import { LinkTab } from './LinkTab'
 
 const TABS: { id: AddTab; label: string }[] = [
   { id: 'search', label: 'Поиск' },
+  { id: 'wave', label: 'Волна' },
   { id: 'library', label: 'Мои плейлисты' },
   { id: 'link', label: 'По ссылке' },
 ]
@@ -48,6 +50,7 @@ export function AddPanel() {
         <SearchPanel />
       </div>
       {top && <EntityView key={`${top.type}:${top.id}`} entity={top} />}
+      {!top && tab === 'wave' && <WavePanel />}
       {!top && tab === 'library' && <LibraryTab />}
       {!top && tab === 'link' && <LinkTab />}
     </div>

@@ -12,6 +12,8 @@ import type {
   ServerMessage,
   SyncState,
   SyncStats,
+  TrackLikes,
+  WaveView,
 } from '@/shared/protocol/generated'
 import type { SocketStatus } from '@/shared/roomSocket'
 
@@ -29,6 +31,8 @@ export interface RoomState {
   stats: SyncStats
   events: RoomEvent[]
   chat: ChatMessage[]
+  wave: WaveView | null
+  trackLikes: TrackLikes
   audioUnlocked: boolean
   sync: SyncState
   trackUnavailable: boolean
@@ -45,6 +49,8 @@ const initial: RoomState = {
   stats: { medianMs: null, p95Ms: null, samples: 0 },
   events: [],
   chat: [],
+  wave: null,
+  trackLikes: { queueItemId: null, userIds: [] },
   audioUnlocked: false,
   sync: 'idle',
   trackUnavailable: false,
@@ -84,6 +90,8 @@ export function applyServerMessage(msg: ServerMessage): void {
         stats: msg.stats,
         events: msg.events.slice(-EVENTS_LIMIT),
         chat: msg.chat.slice(-CHAT_LIMIT),
+        wave: msg.wave,
+        trackLikes: msg.trackLikes,
       })
       break
     case 'playback':
@@ -93,6 +101,12 @@ export function applyServerMessage(msg: ServerMessage): void {
       break
     case 'queue':
       set((s) => (s.queue && msg.queue.version < s.queue.version ? {} : { queue: msg.queue }))
+      break
+    case 'wave':
+      set((s) => (s.wave && msg.wave.version < s.wave.version ? {} : { wave: msg.wave }))
+      break
+    case 'track_likes':
+      set({ trackLikes: msg.likes })
       break
     case 'members':
       set({ members: msg.members, stats: msg.stats })

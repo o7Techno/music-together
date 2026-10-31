@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react'
 
+import { WaveBadge } from '@/features/wave/WaveBadge'
 import { artistNames } from '@/shared/format'
 import { IconButton } from '@/shared/ui/Button'
 import { Cover } from '@/shared/ui/Cover'
@@ -57,6 +58,7 @@ export function MiniPlayer({ onExpand }: { onExpand: () => void }) {
             <span className="text-fg-muted block truncate text-xs">
               {track ? artistNames(track.artists) : 'Добавьте трек'}
             </span>
+            <WaveBadge />
           </span>
         </button>
         <IconButton

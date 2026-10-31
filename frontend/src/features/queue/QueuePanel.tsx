@@ -23,11 +23,14 @@ import { CSS } from '@dnd-kit/utilities'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useRef, useState } from 'react'
 
+import { TrackActions } from '@/features/collection/TrackActions'
+import { usePlaylistPicker } from '@/features/collection/playlistPicker'
 import { useRoomSession } from '@/features/room/RoomContext'
 import { Avatar } from '@/features/room/Members'
 import { CommandError } from '@/features/room/roomSession'
 import { optimisticQueue, useRoomStore } from '@/features/room/roomStore'
 import { useCommand } from '@/features/room/useCommand'
+import { WaveUpNext } from '@/features/wave/WaveUpNext'
 import { artistNames, formatTime, plural } from '@/shared/format'
 import type { QueueItem } from '@/shared/protocol/generated'
 import { Button, IconButton } from '@/shared/ui/Button'
@@ -37,6 +40,7 @@ import {
   HistoryIcon,
   PlayIcon,
   PlayNextIcon,
+  ListPlusIcon,
   ShuffleIcon,
   TrashIcon,
 } from '@/shared/ui/icons'
@@ -99,6 +103,8 @@ export function QueuePanel() {
   const upcoming = useRoomStore((s) => s.queue?.upcoming ?? [])
   const historyCount = useRoomStore((s) => s.queue?.history.length ?? 0)
   const send = useCommand()
+  const waveOn = useRoomStore((s) => s.wave !== null && s.wave.status !== 'off')
+  const openPicker = usePlaylistPicker((s) => s.open)
   const [showHistory, setShowHistory] = useState(false)
   const confirm = useRef<HTMLDialogElement>(null)
   const totalMs = upcoming.reduce((sum, i) => sum + i.track.durationMs, 0)
@@ -117,6 +123,32 @@ export function QueuePanel() {
           )}
         </h2>
         <div className="ml-auto flex items-center">
+          {!showHistory && upcoming.length > 0 && (
+            <IconButton
+              size="sm"
+              label="Сохранить очередь в плейлист"
+              onClick={() => {
+                openPicker({ trackIds: upcoming.map((i) => i.track.id), title: 'Вся очередь' })
+              }}
+            >
+              <ListPlusIcon size={16} />
+            </IconButton>
+          )}
+          {showHistory && historyCount > 0 && (
+            <IconButton
+              size="sm"
+              label="Сохранить историю в плейлист"
+              onClick={() => {
+                const history = useRoomStore.getState().queue?.history ?? []
+                openPicker({
+                  trackIds: history.map((i) => i.track.id),
+                  title: 'История комнаты: последние треки',
+                })
+              }}
+            >
+              <ListPlusIcon size={16} />
+            </IconButton>
+          )}
           {!showHistory && upcoming.length > 1 && (
             <IconButton
               size="sm"
@@ -151,12 +183,16 @@ export function QueuePanel() {
       {showHistory ? (
         <HistoryList />
       ) : upcoming.length === 0 ? (
-        <p className="border-border text-fg-muted rounded-xl border border-dashed p-6 text-center">
-          Найдите трек или вставьте ссылку
-        </p>
+        !waveOn && (
+          <p className="border-border text-fg-muted rounded-xl border border-dashed p-6 text-center">
+            Найдите трек или вставьте ссылку
+          </p>
+        )
       ) : (
         <SortableQueue items={upcoming} />
       )}
+
+      {!showHistory && <WaveUpNext />}
 
       <dialog
         ref={confirm}
@@ -308,6 +344,7 @@ function SortableRow({
       </button>
       <RowContent item={item} index={index} />
       <div className="flex shrink-0 items-center opacity-100 transition-opacity lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100">
+        <TrackActions track={item.track} />
         <IconButton
           size="sm"
           label={`Играть «${item.track.title}» сейчас`}

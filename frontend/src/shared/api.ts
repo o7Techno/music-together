@@ -5,6 +5,7 @@ import type {
   AuthConfig,
   DevicePollResponse,
   DeviceStartResponse,
+  LikedIds,
   Me,
   PlaylistSummary,
   ResolveResponse,
@@ -15,6 +16,8 @@ import type {
   SlugResponse,
   StreamInfo,
   TrackList,
+  WaveMix,
+  WaveOptions,
 } from './protocol/generated'
 
 export class ApiError extends Error {
@@ -61,6 +64,10 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
   return data as T
 }
 
+function roomQuery(room: string | undefined): string {
+  return room ? `?room=${encodeURIComponent(room)}` : ''
+}
+
 export const api = {
   authConfig: () => request<AuthConfig>('GET', '/api/auth/config'),
   me: () => request<Me>('GET', '/api/auth/me'),
@@ -77,6 +84,8 @@ export const api = {
   room: (slug: string) => request<RoomDetails>('GET', `/api/rooms/${encodeURIComponent(slug)}`),
   renameRoom: (slug: string, name: string) =>
     request<RoomDetails>('PATCH', `/api/rooms/${encodeURIComponent(slug)}`, { name }),
+  updateRoom: (slug: string, changes: { waveMix?: WaveMix; announceLikes?: boolean }) =>
+    request<RoomDetails>('PATCH', `/api/rooms/${encodeURIComponent(slug)}`, changes),
   deleteRoom: (slug: string) =>
     request<undefined>('DELETE', `/api/rooms/${encodeURIComponent(slug)}`),
   reissueLink: (slug: string) =>
@@ -97,6 +106,26 @@ export const api = {
   myAlbums: () => request<AlbumSummary[]>('GET', '/api/me/albums'),
   resolveLinks: (text: string, signal?: AbortSignal) =>
     request<ResolveResponse>('POST', '/api/resolve-link', { text }, signal),
+  likedIds: () => request<LikedIds>('GET', '/api/me/liked/ids'),
+  like: (trackId: string, room?: string) =>
+    request<undefined>('PUT', `/api/me/liked/${encodeURIComponent(trackId)}${roomQuery(room)}`),
+  unlike: (trackId: string, room?: string) =>
+    request<undefined>('DELETE', `/api/me/liked/${encodeURIComponent(trackId)}${roomQuery(room)}`),
+  createPlaylist: (title: string) =>
+    request<PlaylistSummary>('POST', '/api/me/playlists', { title }),
+  addToPlaylist: (ref: string, trackIds: string[], allowDuplicate: boolean) =>
+    request<PlaylistSummary>('POST', `/api/me/playlists/${encodeURIComponent(ref)}/tracks`, {
+      trackIds,
+      allowDuplicate,
+    }),
+  removeFromPlaylist: (ref: string, trackId: string) =>
+    request<PlaylistSummary>(
+      'DELETE',
+      `/api/me/playlists/${encodeURIComponent(ref)}/tracks/${encodeURIComponent(trackId)}`,
+    ),
+  waveOptions: () => request<WaveOptions>('GET', '/api/me/wave/options'),
+  updateMySettings: (settings: { waveLearning: boolean }) =>
+    request<Me>('PATCH', '/api/me/settings', settings),
   stream: (trackId: string) =>
     request<StreamInfo>('GET', `/api/stream/${encodeURIComponent(trackId)}`),
 }

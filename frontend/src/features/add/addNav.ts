@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 
-export type AddTab = 'search' | 'library' | 'link'
+export type AddTab = 'wave' | 'search' | 'library' | 'link'
 
 export interface EntityRef {
   type: 'album' | 'playlist' | 'artist' | 'liked'

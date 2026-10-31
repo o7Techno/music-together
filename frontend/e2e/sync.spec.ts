@@ -51,6 +51,55 @@ test('three clients play in sync (30 s measurement)', async ({ browser }, testIn
   expect(stats.spreadP95Ms).toBeLessThanOrEqual(P95_LIMIT)
 })
 
+test('transition between wave tracks is preloaded and stays in sync', async ({ browser }) => {
+  const pages = await threeInRoom(browser)
+  const [anna] = pages as [Page, Page, Page]
+  await anna.getByRole('tab', { name: 'Волна' }).click()
+  await anna.getByRole('button', { name: /Включить мою волну/ }).click()
+  await expect
+    .poll(async () => (await probe(anna))?.trackId ?? '', { timeout: 15_000 })
+    .toMatch(/^fake-wave-/)
+  const first = (await probe(anna))?.trackId ?? ''
+  for (const p of pages) await waitPlaying(p, first)
+
+  // До конца меньше PRELOAD_BEFORE_END_MS: клиенты успевают предзагрузить следующий трек.
+  await anna.evaluate(() => {
+    const s = window.__roomSession
+    const state = s?.engine.state
+    if (!s || !state) throw new Error('no session')
+    void s.command({
+      type: 'cmd.seek',
+      positionMs: state.durationMs - 6_000,
+      expectedQueueItemId: state.queueItemId,
+    })
+  })
+
+  // Пока трек меняется, пишем, сколько длился `loading` у сервера: без предзагрузки он упёрся бы
+  // в таймаут барьера (BARRIER_TIMEOUT_MS = 2500).
+  let loadingStarted: number | null = null
+  let loadingMs: number | null = null
+  const deadline = Date.now() + 30_000
+  while (loadingMs === null && Date.now() < deadline) {
+    const p = await probe(anna)
+    if (p?.trackId !== first) {
+      if (p?.status === 'loading' && loadingStarted === null) loadingStarted = Date.now()
+      if (p?.status === 'playing') loadingMs = Date.now() - (loadingStarted ?? Date.now())
+    }
+    await anna.waitForTimeout(20)
+  }
+  expect(loadingMs).not.toBeNull()
+  console.log('wave transition: loading took', loadingMs, 'ms')
+  expect(loadingMs ?? Infinity).toBeLessThan(CI ? 2_400 : 1_500)
+
+  const second = (await probe(anna))?.trackId ?? ''
+  expect(second).not.toBe(first)
+  for (const p of pages) await waitPlaying(p, second)
+  await anna.waitForTimeout(1_500)
+  const stats = await measureSpread(pages, 5_000)
+  expect(stats.spreadMedianMs).toBeLessThanOrEqual(MEDIAN_LIMIT)
+  expect(stats.spreadP95Ms).toBeLessThanOrEqual(P95_LIMIT)
+})
+
 test('pause, seek and next apply to everyone', async ({ browser }) => {
   const pages = await threeInRoom(browser)
   const [anna, petya, vera] = pages as [Page, Page, Page]

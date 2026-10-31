@@ -130,3 +130,35 @@
 @utility animate-toast-in {
   animation: toast-in 0.18s ease-out;
 }
+
+/* Волна: мягкий акцент без таймеров; при reduced motion — статичный. */
+.wave-hero {
+  background: color-mix(in srgb, var(--c-accent) 12%, transparent);
+}
+
+.wave-playing {
+  --wave-glow: color-mix(in srgb, var(--c-accent) 35%, transparent);
+}
+
+.wave-playing img,
+.wave-playing [role='img'] {
+  animation: wave-glow 4s ease-in-out infinite;
+}
+
+@keyframes wave-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 28px 2px var(--wave-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave-playing img,
+  .wave-playing [role='img'] {
+    animation: none;
+    box-shadow: 0 0 16px 1px var(--wave-glow);
+  }
+}

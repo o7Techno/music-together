@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { AccountNotice } from '@/features/auth/AccountNotice'
 import { useMe } from '@/features/auth/useAuth'
 import { LoginCard } from '@/features/auth/LoginCard'
+import { PlaylistDialog } from '@/features/collection/PlaylistDialog'
 import { QueuePanel } from '@/features/queue/QueuePanel'
 import { AddPanel } from '@/features/add/AddPanel'
 import { useAddNav } from '@/features/add/addNav'
@@ -175,6 +176,7 @@ function RoomLayout() {
       </header>
 
       <MeNotice />
+      <PlaylistDialog />
       {!audioUnlocked && <UnlockBanner />}
 
       <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)_380px]">

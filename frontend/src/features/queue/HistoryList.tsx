@@ -1,6 +1,7 @@
 // История сыгранного (последние 50) с возвратом трека в очередь (SPEC §4.3).
 
 import { useAddTracks } from '@/features/add/useAddTracks'
+import { TrackActions } from '@/features/collection/TrackActions'
 import { useRoomStore } from '@/features/room/roomStore'
 import { artistNames } from '@/shared/format'
 import { IconButton } from '@/shared/ui/Button'
@@ -25,6 +26,7 @@ export function HistoryList() {
             <p className="truncate text-sm">{item.track.title}</p>
             <p className="text-fg-muted truncate text-xs">{artistNames(item.track.artists)}</p>
           </div>
+          <TrackActions track={item.track} />
           <IconButton
             size="sm"
             label={`«${item.track.title}» — следующим`}

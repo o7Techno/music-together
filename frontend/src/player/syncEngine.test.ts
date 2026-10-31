@@ -3,6 +3,7 @@ import type {
   PlaybackState,
   QueueItem,
   QueueState,
+  WaveView,
 } from '@/shared/protocol/generated'
 
 import { SyncEngine } from './syncEngine'
@@ -40,6 +41,7 @@ function queueWith(nextTrackId: string): QueueState {
     },
     addedBy: 'u',
     addedAtMs: 0,
+    origin: { kind: 'manual', ownerId: null, ownerName: null, seedLabel: null },
   })
   return {
     version: 1,
@@ -238,6 +240,112 @@ describe('SyncEngine', () => {
     await env.scheduler.advance(50)
     expect(env.of('ready').at(-1)).toEqual({ type: 'ready', version: 2 })
     expect(env.resolver.calls).toEqual(['t1', 't2'])
+  })
+
+  describe('wave', () => {
+    const waveView = (over: Partial<WaveView> = {}): WaveView => ({
+      version: 1,
+      waveId: 'w',
+      status: 'playing',
+      mode: 'personal',
+      ownerId: 'u',
+      ownerName: 'Аня',
+      ownerAway: false,
+      seedLabel: null,
+      settings: [],
+      next: [],
+      nextTrackId: 'w2',
+      ...over,
+    })
+
+    const playingNearEnd = async () => {
+      const env = setup()
+      await env.engine.unlock()
+      await calibrated(env)
+      return env
+    }
+
+    const startTrack = (env: Awaited<ReturnType<typeof playingNearEnd>>): void => {
+      env.engine.applyState(
+        ps({
+          version: 1,
+          status: 'playing',
+          durationMs: 30_000,
+          anchorServerMs: env.serverNow() + 300,
+        }),
+        false,
+      )
+    }
+
+    it('preloads the track the server named, not the first of the manual queue', async () => {
+      const env = await playingNearEnd()
+      env.engine.handleMessage({ type: 'queue', queue: queueWith('manual') })
+      env.engine.handleMessage({ type: 'wave', wave: waveView() })
+      startTrack(env)
+      await env.scheduler.advance(15_000)
+      expect(env.resolver.calls).toEqual(['t1', 'w2'])
+      expect(env.decks[1].src).toContain('w2')
+
+      // Переход на предзагруженный трек волны — без повторного получения ссылки.
+      env.engine.applyState(ps({ version: 2, queueItemId: 'q2', trackId: 'w2' }), false)
+      await env.scheduler.advance(50)
+      expect(env.of('ready').at(-1)).toEqual({ type: 'ready', version: 2 })
+      expect(env.resolver.calls).toEqual(['t1', 'w2'])
+    })
+
+    it('preloads nothing while the next wave track is unknown, then picks it up', async () => {
+      const env = await playingNearEnd()
+      env.engine.handleMessage({ type: 'wave', wave: waveView({ nextTrackId: null }) })
+      startTrack(env)
+      await env.scheduler.advance(15_000)
+      expect(env.resolver.calls).toEqual(['t1'])
+      env.engine.handleMessage({ type: 'wave', wave: waveView({ version: 2 }) })
+      await env.scheduler.advance(300)
+      expect(env.resolver.calls).toEqual(['t1', 'w2'])
+    })
+
+    it('reloads the spare deck when the next track changes after preloading', async () => {
+      const env = await playingNearEnd()
+      env.engine.handleMessage({ type: 'wave', wave: waveView() })
+      startTrack(env)
+      await env.scheduler.advance(15_000)
+      env.engine.handleMessage({
+        type: 'wave',
+        wave: waveView({ version: 2, nextTrackId: 'pinned' }),
+      })
+      await env.scheduler.advance(300)
+      expect(env.decks[1].src).toContain('pinned')
+    })
+
+    it('ignores an older wave message and uses the queue when the wave is off', async () => {
+      const env = await playingNearEnd()
+      env.engine.handleMessage({ type: 'queue', queue: queueWith('manual') })
+      env.engine.handleMessage({ type: 'wave', wave: waveView({ version: 5 }) })
+      env.engine.handleMessage({
+        type: 'wave',
+        wave: waveView({ version: 4, nextTrackId: 'stale' }),
+      })
+      expect(env.engine.wave?.nextTrackId).toBe('w2')
+      env.engine.handleMessage({
+        type: 'wave',
+        wave: waveView({ version: 6, status: 'off', nextTrackId: null }),
+      })
+      startTrack(env)
+      await env.scheduler.advance(15_000)
+      expect(env.resolver.calls).toEqual(['t1', 'manual'])
+    })
+
+    it('a wave message does not disturb playback', async () => {
+      const env = await playingNearEnd()
+      startTrack(env)
+      await env.scheduler.advance(1000)
+      const before = env.decks[0].paused
+      const seeks = env.decks[0].currentTimeMs
+      env.engine.handleMessage({ type: 'wave', wave: waveView() })
+      expect(env.decks[0].paused).toBe(before)
+      expect(env.decks[0].currentTimeMs).toBe(seeks)
+      expect(env.engine.state?.version).toBe(1)
+    })
   })
 
   it('on playback error tries a mirror, then fetches a fresh link', async () => {

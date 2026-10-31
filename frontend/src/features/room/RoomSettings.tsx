@@ -5,6 +5,7 @@ import { type SyntheticEvent, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { ApiError, api } from '@/shared/api'
+import type { WaveMix } from '@/shared/protocol/generated'
 import { Button, IconButton } from '@/shared/ui/Button'
 import { CloseIcon } from '@/shared/ui/icons'
 import { toast } from '@/shared/ui/Toaster'
@@ -52,6 +53,11 @@ function RoomSettingsForm({ onClose }: { onClose: () => void }) {
       toast.success('Комната переименована')
       void qc.invalidateQueries({ queryKey: ['rooms'] })
     },
+    onError: (e) => toast.error(message(e)),
+  })
+  const settings = useMutation({
+    mutationFn: (changes: { waveMix?: WaveMix; announceLikes?: boolean }) =>
+      api.updateRoom(slug, changes),
     onError: (e) => toast.error(message(e)),
   })
   const reissue = useMutation({
@@ -102,6 +108,36 @@ function RoomSettingsForm({ onClose }: { onClose: () => void }) {
           Сохранить
         </Button>
       </form>
+      <div className="space-y-3">
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>Ручные треки и волна</span>
+          <select
+            value={room?.settings.waveMix ?? 'manual_first'}
+            disabled={settings.isPending}
+            onChange={(e) => {
+              settings.mutate({
+                waveMix: e.target.value === 'alternate' ? 'alternate' : 'manual_first',
+              })
+            }}
+            className="focus-ring border-border bg-surface-2 h-9 rounded-lg border px-2"
+          >
+            <option value="manual_first">Сначала ручные</option>
+            <option value="alternate">Через один</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={room?.settings.announceLikes ?? true}
+            disabled={settings.isPending}
+            onChange={(e) => {
+              settings.mutate({ announceLikes: e.target.checked })
+            }}
+            className="accent-[var(--c-accent)]"
+          />
+          Показывать лайки в ленте
+        </label>
+      </div>
       <div className="space-y-2">
         <p className="text-fg-muted text-sm">
           Перевыпуск ссылки: старая перестанет работать, уже подключённые останутся в комнате.

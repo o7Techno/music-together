@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { LikeButton, PlaylistButton } from '@/features/collection/TrackActions'
+import { useDislike } from '@/features/wave/useWave'
+import { WaveBadge } from '@/features/wave/WaveBadge'
 import { artistNames, formatTime } from '@/shared/format'
 import type { RepeatMode } from '@/shared/protocol/generated'
 import { IconButton } from '@/shared/ui/Button'
 import { Cover } from '@/shared/ui/Cover'
 import {
+  DislikeIcon,
+  HeartIcon,
   MuteIcon,
   NextIcon,
   PauseIcon,
@@ -55,7 +60,9 @@ export function Player() {
   const current = useRoomStore((s) => s.queue?.current ?? null)
   const repeat = useRoomStore((s) => s.queue?.repeat ?? 'off')
   const trackUnavailable = useRoomStore((s) => s.trackUnavailable)
+  const waveOn = useRoomStore((s) => s.wave !== null && s.wave.status !== 'off')
   const send = useCommand()
+  const dislike = useDislike()
   const actions = usePlaybackActions()
   const position = usePosition()
   const [scrub, setScrub] = useState<number | null>(null)
@@ -66,7 +73,11 @@ export function Player() {
 
   return (
     <section aria-label="Плеер" className="flex flex-col gap-4">
-      <div className="relative flex items-center gap-4 lg:flex-col lg:items-stretch">
+      <div
+        className={`relative flex items-center gap-4 lg:flex-col lg:items-stretch ${
+          current?.origin.kind === 'wave' ? 'wave-playing' : ''
+        }`}
+      >
         <ReactionBurst />
         <Cover
           url={track?.coverUrl}
@@ -82,6 +93,7 @@ export function Player() {
           <p className="text-fg-muted truncate">
             {track ? artistNames(track.artists) : 'Добавьте трек в очередь'}
           </p>
+          <WaveBadge className="mt-0.5" />
           {status === 'loading' && <p className="text-fg-subtle text-xs">Загружаем у всех…</p>}
           {trackUnavailable && (
             <p role="status" className="text-warn mt-1 text-sm">
@@ -90,6 +102,19 @@ export function Player() {
           )}
         </div>
       </div>
+
+      {track && (
+        <div className="flex items-center gap-1">
+          <LikeButton track={track} size="md" />
+          <PlaylistButton track={track} size="md" />
+          {current.origin.kind === 'wave' && (
+            <IconButton label="Не нравится" onClick={dislike}>
+              <DislikeIcon />
+            </IconButton>
+          )}
+          <TrackLikers />
+        </div>
+      )}
 
       <div className="space-y-1">
         <input
@@ -127,7 +152,12 @@ export function Player() {
           label={REPEAT_LABEL[repeat]}
           active={repeat !== 'off'}
           onClick={() => {
-            void send({ type: 'cmd.set_repeat', mode: NEXT_REPEAT[repeat] })
+            // С волной повтор очереди не работает: очередь бы не опустела (SPEC-wave §4.2).
+            const next = NEXT_REPEAT[repeat]
+            void send({
+              type: 'cmd.set_repeat',
+              mode: waveOn && next === 'queue' ? NEXT_REPEAT.queue : next,
+            })
           }}
         >
           <span className="relative">
@@ -156,6 +186,27 @@ export function Player() {
       </div>
       <VolumeControl />
     </section>
+  )
+}
+
+/** Кто лайкнул текущий трек в этой комнате: маленькие аватары и счётчик. */
+function TrackLikers() {
+  const likes = useRoomStore((s) => s.trackLikes)
+  const members = useRoomStore((s) => s.members)
+  const count = likes.userIds.length
+  if (count === 0) return null
+  const names = likes.userIds
+    .map((id) => members.find((m) => m.userId === id)?.name)
+    .filter((n): n is string => Boolean(n))
+  return (
+    <span
+      data-testid="track-likers"
+      title={names.join(', ')}
+      className="text-fg-muted ml-auto flex items-center gap-1 text-xs tabular-nums"
+    >
+      <HeartIcon size={14} filled className="text-accent" />
+      {count}
+    </span>
   )
 }
 

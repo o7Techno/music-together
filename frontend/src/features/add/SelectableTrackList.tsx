@@ -3,6 +3,7 @@
 
 import { useMemo, useState } from 'react'
 
+import { TrackActions } from '@/features/collection/TrackActions'
 import { useRoomStore } from '@/features/room/roomStore'
 import { artistNames, formatTime, plural } from '@/shared/format'
 import type { Track } from '@/shared/protocol/generated'
@@ -135,6 +136,7 @@ export function SelectableTrackList({ tracks, source }: Props) {
               <span className="text-fg-subtle shrink-0 text-xs tabular-nums">
                 {formatTime(t.durationMs)}
               </span>
+              {t.available && <TrackActions track={t} />}
             </label>
           </li>
         ))}

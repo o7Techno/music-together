@@ -24,6 +24,34 @@ function Svg({ size = 20, children, ...rest }: IconProps) {
   )
 }
 
+export const HeartIcon = ({ filled = false, ...p }: IconProps & { filled?: boolean }) => (
+  <Svg {...p}>
+    <path
+      d="M12 20s-7.5-4.6-9.2-9.1C1.7 7.8 3.6 5 6.6 5c2 0 3.6 1 5.4 3.1C13.8 6 15.4 5 17.4 5c3 0 4.9 2.8 3.8 5.9C19.5 15.4 12 20 12 20z"
+      fill={filled ? 'currentColor' : 'none'}
+    />
+  </Svg>
+)
+
+export const ListPlusIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 6h12M4 12h9M4 18h6M18 13v8M14 17h8" />
+  </Svg>
+)
+
+export const DislikeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M5.7 5.7l12.6 12.6" />
+  </Svg>
+)
+
+export const PinIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 16v6M8 3h8l-1 7 3 4H6l3-4z" />
+  </Svg>
+)
+
 export const PlayIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke="none" />
