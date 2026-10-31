@@ -34,6 +34,31 @@
 `PYTHONIOENCODING=utf-8`. Фоновые dev-серверы на Windows оставляют дочерние процессы
 (uvicorn reload-worker, vite): останавливать по PID слушателя порта, а не `taskkill /IM`.
 
+Локальный запуск с настоящим Яндексом (без Docker, SQLite, вход по коду):
+`cd backend && ENV=dev MUSIC_PROVIDER=yandex TOKEN_ENCRYPTION_KEYS=<fernet-ключ> DATABASE_URL=sqlite+aiosqlite:///./dev.db DB_AUTO_CREATE=true PUBLIC_ORIGIN=http://localhost:5173 uv run uvicorn app.main:app --port 8000`.
+Vite запускать из `frontend/` как `./node_modules/.bin/vite --port 5173 --strictPort`: `npx` из другого
+каталога поднимет его не там (404). Демон Docker на этой машине может не отвечать: образы проверяет CI
+(job `docker`). Статус CI — badge `actions/workflows/ci.yml/badge.svg?branch=main`: анонимный лимит
+GitHub API быстро кончается, логи job без прав недоступны, аннотации публичны.
+
+## Грабли
+- `yandex_music`: `make_client` не вызывает `init()`, `account_uid` пуст — методам коллекции передавать
+  `user_id=self.uid`, иначе в URL уйдёт `None`. 403 библиотека считает `UnauthorizedError`, а
+  `YandexProvider._call` запускает на него одноразовое обновление токена; 409 и прочие коды становятся
+  `NetworkError` и повторяются. Для мутаций `_call` без правок не подходит.
+- Любая новая версия `PlaybackState` вызывает `SyncEngine.applyState` (сброс контроллера, отмена старта).
+  Не менять её без смены воспроизведения.
+- `_dispatch` в `ws/endpoint.py` обрабатывает сообщения соединения по одному: долгий `await` задержит
+  `ping` и `ready` этого клиента. Запросы к Яндексу держать вне `room.lock` и вне цикла чтения.
+- `ApiModel` — `extra="forbid"`: откат кода после добавления поля в сохраняемое состояние даст
+  `room_state_corrupted`. Новые поля — со значением по умолчанию.
+- `ProviderFactory.for_user` создаёт новый `FakeProvider` на каждый вызов; состояния у него нет.
+- Пользователи dev-логина всегда на FakeProvider, даже при `MUSIC_PROVIDER=yandex` (D-023).
+- На Windows файлы коммитятся без бита исполнения: новые `scripts/*.sh` помечать
+  `git update-index --chmod=+x`.
+- Подсказку Starlette поставить сторонний пакет вместо `httpx` не выполнять (D-006).
+- Токен Яндекса из локального окружения владельца на сервер не переносить: каждый входит сам.
+
 ## Прод
 `docker-compose.yml` (db, backend, web=Caddy), `backend/Dockerfile`, `frontend/Dockerfile`, `Caddyfile`.
 `.env` для сервера — `scripts/init-env.sh <домен>`. Бэкапы — `scripts/backup.sh`,
