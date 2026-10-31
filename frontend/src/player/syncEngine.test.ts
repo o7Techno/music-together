@@ -536,6 +536,7 @@ describe('SyncEngine', () => {
           ownerAway: false,
           seedLabel: null,
           settings: [],
+          sources: [],
           next: [],
           nextTrackId: null,
         },
