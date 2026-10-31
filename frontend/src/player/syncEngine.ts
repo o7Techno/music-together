@@ -40,6 +40,17 @@ const SEEK_TOLERANCE_MS = 30
 const SPIN_WINDOW_MS = 20
 const CALIBRATION_WAIT_MS = 1500
 const MAX_RELOADS_PER_TRACK = 3
+/** Настенные часы и таймер разошлись на столько — устройство спало, оценке часов верить нельзя. */
+const CLOCK_JUMP_MS = 1000
+/** Такой перерыв между тиками — таймеры стояли: заново меряем часы. */
+const TICK_GAP_MS = 5000
+/** Экран заблокирован: перематывать только при большом расхождении и редко, каждая перемотка слышна. */
+export const BACKGROUND_HARD_SEEK_MS = 3000
+const BACKGROUND_SEEK_INTERVAL_MS = 30_000
+/** Звук остановился не по команде (звонок, другое приложение): как часто пробовать продолжить. */
+const RESUME_RETRY_MS = 3000
+/** Буферизация дольше этого — ссылка или соединение умерли: загружаем заново. */
+const STALL_RELOAD_MS = 10_000
 
 export interface SyncEngineDeps {
   clock: Clock
@@ -51,6 +62,10 @@ export interface SyncEngineDeps {
   /** Задержка вывода звука (AudioContext.outputLatency), мс; null — неизвестна. */
   outputLatencyMs?: () => number | null
   logger?: Logger
+  /** Настенные часы (Date.now): идут и во время сна устройства, в отличие от performance.now на iOS. */
+  wallNow?: () => number
+  /** Экран iPhone заблокирован: JS замедлен, а новый аудиоэлемент система может не запустить. */
+  background?: () => boolean
 }
 
 export interface DebugInfo {
@@ -136,6 +151,13 @@ export class SyncEngine {
   private playStartedAt = 0
   private lastStatusSent = ''
   private calibrationWaiters: (() => void)[] = []
+  private lastTick: { local: number; wall: number } | null = null
+  private lastBackgroundSeekAt = -Infinity
+  private lastResumeAt = -Infinity
+  private stoppedSince: number | null = null
+  private bufferingSince: number | null = null
+  /** Пауза нажата на экране блокировки: команда ещё идёт на сервер, звук не возобновлять. */
+  private pausedLocally = false
   private readonly deckUnsubs: (() => void)[] = []
 
   constructor(deps: SyncEngineDeps) {
@@ -147,6 +169,8 @@ export class SyncEngine {
       send: deps.send,
       outputLatencyMs: deps.outputLatencyMs ?? (() => null),
       logger: deps.logger ?? silentLogger,
+      wallNow: deps.wallNow ?? (() => deps.clock.now()),
+      background: deps.background ?? (() => false),
     }
     this.controller = new DriftController(deps.profile ?? DESKTOP_PROFILE)
     ;[this.active, this.spare] = deps.decks
@@ -261,6 +285,7 @@ export class SyncEngine {
     const prev = this.state
     if (!force && prev && state.version <= prev.version) return
     this.state = state
+    this.pausedLocally = false
     const trackChanged = prev?.queueItemId !== state.queueItemId
     if (trackChanged) {
       this.trackUnavailable = false
@@ -279,7 +304,9 @@ export class SyncEngine {
         if (state.trackId) void this.cuePaused(state)
         break
       case 'loading':
-        this.active.pause()
+        // На заблокированном экране не останавливаем: без играющего звука система усыпляет
+        // страницу, и следующий трек уже не запустится.
+        if (!this.d.background()) this.active.pause()
         this.spare.pause()
         if (state.trackId) void this.prepareAndReady(state)
         break
@@ -303,8 +330,15 @@ export class SyncEngine {
     const version = state.version
     const deck = await this.ensureTrack(state, version)
     if (!deck || this.isStale(version)) return
-    deck.pause()
     this.seekIfFar(deck, state.positionMs)
+    if (this.d.background() && this.audioUnlocked) {
+      // Запускаем сразу, пока страница не уснула; общая позиция выправится по формуле сервера.
+      deck.play().catch((err: unknown) => {
+        this.d.logger.debug('background play rejected', { err: String(err) })
+      })
+    } else {
+      deck.pause()
+    }
     await this.waitBuffered(deck, state.positionMs, version)
     if (this.isStale(version)) return
     if (this.audioUnlocked && !this.trackUnavailable) this.d.send({ type: 'ready', version })
@@ -416,7 +450,8 @@ export class SyncEngine {
     const trackId = state.trackId
     if (!trackId) return null
     if (this.deckTracks.get(this.active.id)?.trackId === trackId) return this.active
-    if (this.deckTracks.get(this.spare.id)?.trackId === trackId) {
+    const background = this.d.background()
+    if (!background && this.deckTracks.get(this.spare.id)?.trackId === trackId) {
       // Следующий трек уже предзагружен — меняем деки местами, барьер проходит почти мгновенно.
       this.active.pause()
       ;[this.active, this.spare] = [this.spare, this.active]
@@ -425,7 +460,7 @@ export class SyncEngine {
     try {
       const source = await this.d.resolver.resolve(trackId)
       if (this.isStale(version)) return null
-      this.active.pause()
+      if (!background) this.active.pause()
       this.loadInto(this.active, trackId, [source.url, ...source.mirrors])
       return this.active
     } catch (err) {
@@ -461,6 +496,8 @@ export class SyncEngine {
     const state = this.state
     const trackId = this.nextTrackId()
     if (state?.status !== 'playing' || !trackId || trackId === state.trackId) return
+    // На заблокированном экране второй элемент не запустить: трек сменим на текущем.
+    if (this.d.background()) return
     const remaining = state.durationMs - this.expectedPositionMs()
     if (remaining > PRELOAD_BEFORE_END_MS) return
     if (this.preloading === trackId || this.deckTracks.get(this.spare.id)?.trackId === trackId) {
@@ -489,12 +526,14 @@ export class SyncEngine {
       deck.on('waiting', () => {
         if (deck === this.active) {
           this.buffering = true
+          this.bufferingSince ??= this.d.clock.now()
           this.updateSync()
         }
       }),
       deck.on('playing', () => {
         if (deck === this.active) {
           this.buffering = false
+          this.bufferingSince = null
           this.updateSync()
         }
       }),
@@ -549,7 +588,9 @@ export class SyncEngine {
 
   /** Один шаг коррекции. Вызывается таймером; пропуски тиков не накапливают ошибку. */
   tick(): void {
+    this.checkClockJump()
     this.maybePreload()
+    this.recoverStoppedAudio()
     const m = this.measureDrift()
     if (!m) {
       this.lastDriftMs = null
@@ -564,7 +605,11 @@ export class SyncEngine {
       this.startLatencyMs = Math.min(200, Math.max(0, this.startLatencyMs - m.drift * 0.5))
     }
     const state = this.state
-    if (state && state.durationMs - m.expected > 300) {
+    if (!this.clockSync.calibrated) {
+      // Часы только что сбились и меряются заново: нынешний дрейф — артефакт, не трогаем звук.
+    } else if (this.d.background()) {
+      this.correctInBackground(m, now)
+    } else if (state && state.durationMs - m.expected > 300) {
       const action = this.controller.update(m.drift, m.expected, now)
       if (action.kind === 'seek') {
         this.active.seek(action.targetMs)
@@ -584,6 +629,88 @@ export class SyncEngine {
       })
     }
     this.updateSync()
+  }
+
+  private correctInBackground(m: { drift: number; expected: number }, now: number): void {
+    if (Math.abs(this.active.playbackRate - 1) > 0.0005) this.active.playbackRate = 1
+    if (
+      Math.abs(m.drift) >= BACKGROUND_HARD_SEEK_MS &&
+      now - this.lastBackgroundSeekAt >= BACKGROUND_SEEK_INTERVAL_MS
+    ) {
+      this.lastBackgroundSeekAt = now
+      this.active.seek(m.expected + this.controller.seekLatencyMs)
+      this.controller.noteSeek(now)
+    }
+  }
+
+  /** Устройство спало или таймеры стояли: старые замеры часов больше не годятся. */
+  private checkClockJump(): void {
+    const local = this.d.clock.now()
+    const wall = this.d.wallNow()
+    const last = this.lastTick
+    this.lastTick = { local, wall }
+    if (!last) return
+    const localDelta = local - last.local
+    const wallDelta = wall - last.wall
+    if (Math.abs(wallDelta - localDelta) > CLOCK_JUMP_MS || localDelta > TICK_GAP_MS) {
+      this.d.logger.debug('clock jump, recalibrating', { localDelta, wallDelta })
+      this.clockSync.resetWindow()
+      this.controller.reset()
+      this.pingBurst(CALIBRATION_PINGS)
+    }
+  }
+
+  /** Система остановила звук или загрузка зависла: продолжаем сами, без действий пользователя. */
+  private recoverStoppedAudio(): void {
+    const state = this.state
+    if (state?.status !== 'playing' || !this.audioUnlocked || this.trackUnavailable) return
+    if (this.pausedLocally) return
+    const now = this.d.clock.now()
+    const since = this.bufferingSince
+    if (this.buffering && since !== null && now - since >= STALL_RELOAD_MS) {
+      this.bufferingSince = now
+      const trackId = state.trackId
+      if (trackId && this.deckTracks.get(this.active.id)?.trackId === trackId) {
+        this.d.logger.debug('stalled, reloading track', { trackId })
+        this.deckTracks.delete(this.active.id)
+        this.applyState(state, true)
+      }
+      return
+    }
+    if (!this.started || !this.active.paused) {
+      this.stoppedSince = null
+      return
+    }
+    if (state.durationMs - this.expectedPositionMs() <= 300) return
+    // Не сразу: короткие остановки система снимает сама.
+    this.stoppedSince ??= now
+    if (now - this.stoppedSince < RESUME_RETRY_MS || now - this.lastResumeAt < RESUME_RETRY_MS) {
+      return
+    }
+    this.lastResumeAt = now
+    this.active.play().catch((err: unknown) => {
+      this.d.logger.debug('resume rejected', { err: String(err) })
+      if (err instanceof Error && err.name === 'NotAllowedError') {
+        this.audioUnlocked = false
+        this.sendStatus()
+        this.emit()
+      }
+    })
+  }
+
+  /** Кнопки экрана блокировки: откликаемся сразу, не дожидаясь ответа сервера. */
+  pauseLocally(): void {
+    this.pausedLocally = true
+    this.active.pause()
+  }
+
+  /** Вызывать прямо из обработчика кнопки: иначе система может запретить запуск. */
+  playLocally(): void {
+    this.pausedLocally = false
+    if (!this.d.background() || !this.state?.trackId || !this.audioUnlocked) return
+    this.active.play().catch((err: unknown) => {
+      this.d.logger.debug('local play rejected', { err: String(err) })
+    })
   }
 
   private updateSync(): void {
@@ -630,6 +757,9 @@ export class SyncEngine {
 
   /** Вкладка снова на экране: система могла остановить звук, пока приложение было в фоне. */
   resumeIfStopped(): void {
+    // Пока страница спала, часы могли разойтись незаметно для тика: меряем заново в любом случае.
+    this.clockSync.resetWindow()
+    this.pingBurst(CALIBRATION_PINGS)
     this.tick()
     if (this.state?.status === 'playing' && this.audioUnlocked && this.active.paused) {
       this.applyState(this.state, true)

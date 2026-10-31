@@ -57,4 +57,16 @@ describe('ClockSync', () => {
     expect(sync.serverNow(1000)).toBeCloseTo(1250)
     expect(sync.toLocal(1250)).toBeCloseTo(1000)
   })
+
+  it('forgets old samples even if their RTT was the best', () => {
+    const sync = new ClockSync()
+    for (let i = 0; i < 3; i++) sync.addSample(i, 1000 + i + 1, i + 2)
+    expect(sync.offsetMs).toBeCloseTo(1000, 0)
+    // Прошло больше двух минут, часы сместились, а RTT стал хуже.
+    const later = 200_000
+    for (let i = 0; i < 3; i++) {
+      sync.addSample(later + i, later + i + 5000 + 20, later + i + 40)
+    }
+    expect(sync.offsetMs).toBeCloseTo(5000, 0)
+  })
 })

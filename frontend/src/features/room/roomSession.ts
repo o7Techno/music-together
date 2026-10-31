@@ -3,7 +3,7 @@
 
 import { useAuthIssue } from '@/features/auth/authIssue'
 import { BrowserScheduler, HtmlAudioDeck, LatencyProbe, browserClock } from '@/player/browser'
-import { detectProfile } from '@/player/platform'
+import { detectProfile, isIOS } from '@/player/platform'
 import { SyncEngine } from '@/player/syncEngine'
 import { type StreamResolver, TrackUnavailable } from '@/player/types'
 import { ApiError, api } from '@/shared/api'
@@ -13,11 +13,13 @@ import { RoomSocket, roomSocketUrl } from '@/shared/roomSocket'
 import { applyServerMessage, resetRoomStore, useRoomStore } from './roomStore'
 
 const COMMAND_TIMEOUT_MS = 10_000
+const CONNECTION_CHECK_MS = 15_000
+const SILENCE_MS = 70_000
 // Активация жестом: на iOS считаются touchend и click, но не touchstart и pointerdown.
 const GESTURE_EVENTS = ['click', 'touchend', 'pointerup', 'keydown'] as const
 
 type CommandMessage = Extract<ClientMessage, { clientMsgId: string }>
-type CommandInput = CommandMessage extends infer M
+export type CommandInput = CommandMessage extends infer M
   ? M extends CommandMessage
     ? Omit<M, 'clientMsgId'>
     : never
@@ -65,6 +67,8 @@ export class RoomSession {
   private readonly pending = new Map<string, Pending>()
   private seq = 0
   private disposed = false
+  private lastMessageAt = Date.now()
+  private pendingMediaCommand: (() => CommandInput) | null = null
   private readonly cleanups: (() => void)[] = []
   private errorListeners = new Set<(err: CommandError) => void>()
 
@@ -72,7 +76,10 @@ export class RoomSession {
     resetRoomStore()
     this.decks = [new HtmlAudioDeck('a'), new HtmlAudioDeck('b')]
     const params = new URLSearchParams(window.location.search)
+    const ios = isIOS(navigator)
     this.engine = new SyncEngine({
+      wallNow: () => Date.now(),
+      background: () => ios && document.visibilityState === 'hidden',
       clock: browserClock,
       scheduler: new BrowserScheduler(),
       decks: this.decks,
@@ -124,8 +131,14 @@ export class RoomSession {
       this.socket.reconnectNow()
     }
     const onVisible = (): void => {
-      if (document.visibilityState === 'visible') this.engine.resumeIfStopped()
+      if (document.visibilityState !== 'visible') return
+      this.socket.reconnectNow()
+      this.dropIfSilent()
+      this.engine.resumeIfStopped()
     }
+    const watchdog = window.setInterval(() => {
+      this.dropIfSilent()
+    }, CONNECTION_CHECK_MS)
     // Любое нажатие в комнате включает звук: отдельная кнопка не нужна. Слушаем постоянно, потому
     // что система может снова запретить звук, например после звонка или возврата из фона.
     const onGesture = (): void => {
@@ -136,6 +149,7 @@ export class RoomSession {
     window.addEventListener('pageshow', onVisible)
     for (const type of GESTURE_EVENTS) document.addEventListener(type, onGesture, true)
     this.cleanups.push(() => {
+      window.clearInterval(watchdog)
       window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('pageshow', onVisible)
@@ -169,9 +183,33 @@ export class RoomSession {
     }
   }
 
+  /** Пинги идут каждые 30 с: долгая тишина значит, что соединение умерло во время сна. */
+  private dropIfSilent(): void {
+    if (useRoomStore.getState().status === 'open' && Date.now() - this.lastMessageAt > SILENCE_MS) {
+      this.lastMessageAt = Date.now()
+      this.socket.drop()
+    }
+  }
+
+  /** Команда с экрана блокировки: соединение могло умереть, а тост там никто не увидит. */
+  mediaCommand(build: () => CommandInput): void {
+    if (useRoomStore.getState().status === 'open') {
+      this.command(build()).catch(() => undefined)
+      return
+    }
+    this.pendingMediaCommand = build
+    this.socket.reconnectNow()
+  }
+
   private onMessage(msg: ServerMessage): void {
+    this.lastMessageAt = Date.now()
     this.engine.handleMessage(msg)
     applyServerMessage(msg)
+    if (msg.type === 'snapshot' && this.pendingMediaCommand) {
+      const build = this.pendingMediaCommand
+      this.pendingMediaCommand = null
+      this.command(build()).catch(() => undefined)
+    }
     if (msg.type === 'ack') {
       const p = this.pending.get(msg.clientMsgId)
       if (p) {

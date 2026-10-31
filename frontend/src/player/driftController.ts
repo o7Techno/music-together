@@ -36,6 +36,7 @@ export type DriftAction =
   { kind: 'none'; rate: 1 } | { kind: 'rate'; rate: number } | { kind: 'seek'; targetMs: number }
 
 const SMOOTHING_WINDOW = 3
+const UNSTABLE_SEEK_INTERVAL_MS = 30_000
 const SEEK_LATENCY_MIN = 0
 const SEEK_LATENCY_MAX = 600
 
@@ -99,7 +100,10 @@ export class DriftController {
     }
 
     if (abs >= p.hardSeekMs) {
-      if (nowMs - this.lastSeekAt >= p.minSeekIntervalMs) {
+      // Seek не помогает — повторяем редко: частая перемотка слышна как непрерывные лаги.
+      const interval =
+        this.seekFailures > p.maxSeekFailures + 1 ? UNSTABLE_SEEK_INTERVAL_MS : p.minSeekIntervalMs
+      if (nowMs - this.lastSeekAt >= interval) {
         this.lastSeekAt = nowMs
         this.pendingSeekCheck = true
         this.recent = []
