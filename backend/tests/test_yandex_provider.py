@@ -12,6 +12,7 @@ from yandex_music.exceptions import BadRequestError, NetworkError, TimedOutError
 from app.core.ratelimit import RateLimiter
 from app.providers import yandex as ym
 from app.providers.base import (
+    DuplicateTrackError,
     EntityKind,
     ProviderAuthError,
     ProviderError,
@@ -19,6 +20,7 @@ from app.providers.base import (
     StreamMode,
     SubscriptionRequiredError,
     TrackUnavailableError,
+    WaveSessionLostError,
 )
 from app.providers.yandex import TTLCache, YandexProvider, map_track, stream_expiry
 from app.providers.yandex_links import ParsedLink
@@ -279,3 +281,183 @@ async def test_search_maps_best_result() -> None:
     assert result.best is not None
     assert result.best.kind is EntityKind.ARTIST
     assert [t.id for t in result.tracks] == ["1"]
+
+
+# ── Волна и коллекция ───────────────────────────────────────────────────────────
+
+
+def sequence(*items: NS) -> list[NS]:
+    return list(items)
+
+
+def seq_track(i: int, **kw: Any) -> NS:
+    return NS(type="track", track=raw_track(i, **kw), liked=False)
+
+
+async def test_wave_batch_keeps_only_playable_tracks() -> None:
+    no_duration = raw_track(5)
+    no_duration.duration_ms = 0
+    session = NS(
+        radio_session_id="s",
+        batch_id="b",
+        sequence=[
+            seq_track(1),
+            NS(type="ad", track=raw_track(2), liked=False),
+            NS(type="track", track=None, liked=False),
+            seq_track(3, available=False),
+            NS(type="track", track=no_duration, liked=False),
+            seq_track(4),
+        ],
+    )
+    client = FakeClient(rotor_session_new=lambda *_a, **_k: session)
+    batch = await provider(client).start_wave(["user:onyourwave"], [], incognito=False)
+    assert [t.id for t in batch.tracks] == ["1", "4"]
+    assert batch.session_id == "s"
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        NS(unknown_session=True, terminated=False, batch_id=None, sequence=[]),
+        NS(unknown_session=False, terminated=True, batch_id=None, sequence=[]),
+        None,
+    ],
+)
+async def test_lost_session_raises(answer: Any) -> None:
+    client = FakeClient(rotor_session_tracks=lambda *_a, **_k: answer)
+    with pytest.raises(WaveSessionLostError):
+        await provider(client).next_wave_tracks("s", ["1"])
+
+
+async def test_like_passes_user_id_and_forgets_cache() -> None:
+    """`account_uid` пуст: без `user_id` библиотека подставила бы None в URL."""
+    calls: list[Any] = []
+    likes = NS(tracks=[NS(track_id="7:10")])
+
+    def add(track_id: str, user_id: Any = None) -> bool:
+        calls.append((track_id, user_id))
+        return True
+
+    client = FakeClient(users_likes_tracks=lambda _uid: likes, users_likes_tracks_add=add)
+    p = provider(client)
+    assert await p.get_liked_track_ids() == {"7"}
+    await p.get_liked_track_ids()
+    assert client.calls["users_likes_tracks"] == 1
+    await p.like_track("9")
+    assert calls == [("9", "42")]
+    await p.get_liked_track_ids()
+    assert client.calls["users_likes_tracks"] == 2
+
+
+def own_playlist(revision: int, *ids: str) -> NS:
+    return NS(
+        kind=5,
+        revision=revision,
+        track_count=len(ids),
+        tracks=[NS(id=i) for i in ids],
+        owner=NS(uid=42, name="Я", login="me"),
+        title="Мой",
+        playlist_uuid=None,
+        cover_uri=None,
+        og_image=None,
+        cover=None,
+    )
+
+
+def wrong_revision() -> NetworkError:
+    return NetworkError("wrong-revision (412): Expected revision: 1, actual revision: 2")
+
+
+class PlaylistClient(FakeClient):
+    """Плейлист с ревизией: `changes` — ответы на изменения по очереди."""
+
+    def __init__(self, *reads: NS, changes: list[Any]) -> None:
+        self.reads = list(reads)
+        self.changes = changes
+        self.sent: list[tuple[int, str]] = []
+        super().__init__(
+            tracks=lambda _ids: [raw_track(1)],
+            users_playlists=lambda _kind, _uid: self.reads.pop(0),
+            users_playlists_change=self._change,
+        )
+
+    def _change(self, _kind: int, diff: str, revision: int, user_id: Any = None) -> Any:
+        assert user_id == "42"
+        self.sent.append((revision, diff))
+        return self.changes.pop(0)
+
+
+async def test_revision_conflict_rereads_and_retries_without_error() -> None:
+    client = PlaylistClient(
+        own_playlist(1),
+        own_playlist(2, "99"),
+        changes=[wrong_revision(), own_playlist(3, "99", "1")],
+    )
+    result = await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=False)
+    assert result.track_count == 2
+    assert result.editable is True
+    assert [r for r, _ in client.sent] == [1, 2]
+    assert client.calls["users_playlists_change"] == 2
+
+
+async def test_too_many_conflicts_give_understandable_error() -> None:
+    client = PlaylistClient(
+        own_playlist(1), own_playlist(2), own_playlist(3), changes=[wrong_revision()] * 3
+    )
+    with pytest.raises(ProviderError, match="часто меняется"):
+        await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=False)
+
+
+async def test_timeout_with_grown_revision_does_not_insert_twice() -> None:
+    client = PlaylistClient(own_playlist(1), own_playlist(2, "1"), changes=[TimedOutError()])
+    result = await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=True)
+    assert result.track_count == 1
+    assert client.calls["users_playlists_change"] == 1
+
+
+async def test_timeout_without_grown_revision_retries() -> None:
+    client = PlaylistClient(
+        own_playlist(1), own_playlist(1), changes=[TimedOutError(), own_playlist(2, "1")]
+    )
+    result = await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=False)
+    assert result.track_count == 1
+    assert client.calls["users_playlists_change"] == 2
+
+
+async def test_duplicate_is_reported_by_us() -> None:
+    client = PlaylistClient(own_playlist(1, "1"), changes=[])
+    with pytest.raises(DuplicateTrackError):
+        await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=False)
+
+
+async def test_foreign_playlist_is_rejected_before_any_request() -> None:
+    client = PlaylistClient(changes=[])
+    with pytest.raises(ProviderNotFoundError):
+        await provider(client).add_to_playlist("77:5", ["1"], allow_duplicate=False)
+    assert "users_playlists" not in client.calls
+
+
+async def test_track_without_album_cannot_be_added() -> None:
+    no_album = raw_track(1)
+    no_album.albums = []
+    client = FakeClient(tracks=lambda _ids: [no_album])
+    with pytest.raises(TrackUnavailableError):
+        await provider(client).add_to_playlist("42:5", ["1"], allow_duplicate=False)
+
+
+async def test_remove_uses_exclusive_upper_bound() -> None:
+    client = PlaylistClient(own_playlist(1, "8", "1", "9"), changes=[own_playlist(2, "8", "9")])
+    await provider(client).remove_from_playlist("42:5", "1")
+    assert '"from": 1' in client.sent[0][1] or '"from":1' in client.sent[0][1]
+    assert '"to": 2' in client.sent[0][1] or '"to":2' in client.sent[0][1]
+
+
+async def test_created_playlist_is_private() -> None:
+    seen: dict[str, Any] = {}
+
+    def create(title: str, visibility: str = "public", user_id: Any = None) -> NS:
+        seen.update(title=title, visibility=visibility, user_id=user_id)
+        return own_playlist(1)
+
+    await provider(FakeClient(users_playlists_create=create)).create_playlist("Новый")
+    assert seen == {"title": "Новый", "visibility": "private", "user_id": "42"}

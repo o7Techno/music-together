@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
+from app.api.collection import router as collection_router
 from app.api.health import router as health_router
 from app.api.music import router as music_router
 from app.api.rooms import router as rooms_router
@@ -36,6 +37,7 @@ from app.providers.fake import FAKE_MEDIA_DIR, FAKE_MEDIA_URL
 from app.providers.yandex_pool import YandexProviderPool
 from app.rooms.manager import RoomManager
 from app.rooms.timers import AsyncioTimers
+from app.rooms.wave_driver import ProviderWaveDriver
 from app.ws.endpoint import router as ws_router
 from app.ws.hub import ConnectionHub
 
@@ -59,16 +61,27 @@ def build_context(settings: Settings, clock: Clock | None = None) -> AppContext:
             )
         yandex_auth = YandexAuthClient(settings.ym_proxy_url)
         yandex = YandexProviderPool(settings, cipher, db, yandex_auth)
+    providers = ProviderFactory(settings.music_provider, yandex)
+    wave_driver = ProviderWaveDriver(db, providers)
     return AppContext(
         settings=settings,
         db=db,
         clock=clock,
         hub=hub,
-        rooms=RoomManager(db, clock, AsyncioTimers(), hub),
-        providers=ProviderFactory(settings.music_provider, yandex),
+        rooms=RoomManager(
+            db,
+            clock,
+            AsyncioTimers(),
+            hub,
+            wave_driver=wave_driver,
+            owner_grace_ms=settings.wave_owner_grace_s * 1000,
+        ),
+        providers=providers,
+        wave_driver=wave_driver,
         cipher=cipher,
         search_limiter=RateLimiter(rate=3, burst=10, monotonic=clock.monotonic),
         stream_limiter=RateLimiter(rate=2, burst=10, monotonic=clock.monotonic),
+        collection_limiter=RateLimiter(rate=5, burst=20, monotonic=clock.monotonic),
         login_limiter=RateLimiter(rate=0.2, burst=5, monotonic=clock.monotonic),
         yandex_auth=yandex_auth,
         device_flows=DeviceFlowStore(),
@@ -88,7 +101,7 @@ async def _cleanup_sessions(ctx: AppContext, interval_s: float = 3600) -> None:
         await asyncio.sleep(interval_s)
 
 
-def create_app(settings: Settings | None = None, ctx: AppContext | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, ctx: AppContext | None = None) -> FastAPI:  # noqa: PLR0915 — сборка приложения одним списком
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -117,6 +130,8 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
             await context.rooms.shutdown()
+            if context.wave_driver is not None:
+                await context.wave_driver.close()
             await asyncio.sleep(0.05)  # дать писателям WS отправить close-фреймы
             await context.db.dispose()
             log.info("shutdown")
@@ -162,6 +177,8 @@ def create_app(settings: Settings | None = None, ctx: AppContext | None = None) 
     app.include_router(yandex_auth_router)
     app.include_router(stream_router)
     app.include_router(rooms_router)
+    # Раньше music_router: и там, и здесь есть пути /api/me/*, но они не пересекаются.
+    app.include_router(collection_router)
     app.include_router(music_router)
     app.include_router(ws_router)
     if settings.allow_dev_login:

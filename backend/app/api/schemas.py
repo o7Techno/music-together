@@ -8,6 +8,7 @@ from pydantic import Field
 
 from app.core.schema import ApiModel
 from app.db.models import User
+from app.rooms.wave import WaveMix
 
 
 class Me(ApiModel):
@@ -19,6 +20,7 @@ class Me(ApiModel):
     provider: str
     provider_connected: bool
     """Токен Яндекса на месте (dev-пользователи — всегда). False → нужен повторный вход."""
+    wave_learning: bool = True
 
     @classmethod
     def of(cls, user: User) -> Me:
@@ -30,6 +32,7 @@ class Me(ApiModel):
             has_plus=user.has_plus,
             provider=user.provider,
             provider_connected=user.provider != "yandex" or user.token_enc is not None,
+            wave_learning=user.wave_learning,
         )
 
 
@@ -53,8 +56,10 @@ class CreateRoomRequest(ApiModel):
     name: str | None = Field(default=None, max_length=80)
 
 
-class RenameRoomRequest(ApiModel):
-    name: str = Field(min_length=1, max_length=80)
+class UpdateRoomRequest(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    wave_mix: WaveMix | None = None
+    announce_likes: bool | None = None
 
 
 class RoomSummary(ApiModel):

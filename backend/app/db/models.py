@@ -6,7 +6,16 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    true,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -52,6 +61,8 @@ class User(Base):
     display_name: Mapped[str] = mapped_column(String(128))
     avatar_url: Mapped[str | None] = mapped_column(String(512))
     has_plus: Mapped[bool] = mapped_column(Boolean, default=False)
+    wave_learning: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    """Учить волну этого пользователя на прослушиваниях в комнатах."""
     token_enc: Mapped[str | None] = mapped_column(Text)
     """OAuth-токен Яндекса, зашифрован (Fernet). Никогда не покидает сервер."""
     refresh_token_enc: Mapped[str | None] = mapped_column(Text)
@@ -81,7 +92,7 @@ class Room(Base):
     name: Mapped[str] = mapped_column(String(80))
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     state: Mapped[dict[str, Any]] = mapped_column(default=dict)
-    """Снимок `{"playback": PlaybackState, "queue": QueueState}`."""
+    """Снимок `{"playback": PlaybackState, "queue": QueueState, "wave": …, "settings": …}`."""
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 

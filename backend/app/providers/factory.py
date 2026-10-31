@@ -7,7 +7,7 @@ from typing import Protocol
 from app.core.config import MusicProviderKind
 from app.db.models import User
 from app.providers.base import MusicProvider, ProviderAuthError
-from app.providers.fake import FakeProvider
+from app.providers.fake import FakeProvider, FakeWorld
 
 
 class YandexProviderBuilder(Protocol):
@@ -20,10 +20,11 @@ class ProviderFactory:
     ) -> None:
         self.kind = kind
         self._yandex = yandex
+        self.fake_world = FakeWorld()
 
     def for_user(self, user: User) -> MusicProvider:
         if self.kind is MusicProviderKind.FAKE or user.provider == "dev":
-            return FakeProvider(user.id)
+            return FakeProvider(user.id, self.fake_world)
         if self._yandex is None:
             raise ProviderAuthError
         return self._yandex(user)

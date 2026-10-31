@@ -33,6 +33,12 @@ export type ClientMessage =
   | QueueClear
   | ChatSend
   | ReactionSend
+  | WaveStart
+  | WaveStop
+  | WaveUpdateSettings
+  | WavePin
+  | WaveRemove
+  | TrackDislike
 export type SyncState = 'in_sync' | 'catching_up' | 'buffering' | 'unstable' | 'idle'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -40,6 +46,11 @@ export type SyncState = 'in_sync' | 'catching_up' | 'buffering' | 'unstable' | '
  */
 export type RepeatMode = 'off' | 'queue' | 'track'
 export type AddPosition1 = 'end' | 'next' | 'now'
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveMode".
+ */
+export type WaveMode = 'personal' | 'seed'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "CloseReason".
@@ -66,6 +77,17 @@ export type EventKind =
   | 'repeat'
   | 'renamed'
   | 'kicked'
+  | 'wave_started'
+  | 'wave_replaced'
+  | 'wave_stopped'
+  | 'wave_unavailable'
+  | 'wave_resumed'
+  | 'track_liked'
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveStopReason".
+ */
+export type WaveStopReason = 'user' | 'owner_away' | 'owner_gone' | 'auth'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "SyncState".
@@ -78,6 +100,7 @@ export type PlaybackStatus = 'playing' | 'paused' | 'loading'
  */
 export type PlaybackStatus1 = 'playing' | 'paused' | 'loading'
 export type RepeatMode1 = 'off' | 'queue' | 'track'
+export type WaveMix = 'manual_first' | 'alternate'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "ServerMessage".
@@ -91,14 +114,27 @@ export type ServerMessage =
   | RoomInfoMessage
   | EventMessage
   | ChatMessageEnvelope
+  | WaveMessage
+  | TrackLikesMessage
   | Ack
   | ErrorMessage
   | Closed
+export type WaveStatus = 'off' | 'starting' | 'playing' | 'waiting' | 'unavailable'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "StreamMode".
  */
 export type StreamMode = 'direct' | 'proxy'
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveMix".
+ */
+export type WaveMix1 = 'manual_first' | 'alternate'
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveStatus".
+ */
+export type WaveStatus1 = 'off' | 'starting' | 'playing' | 'waiting' | 'unavailable'
 
 export interface Protocol {
   Ack?: Ack
@@ -129,6 +165,7 @@ export interface Protocol {
   ErrorMessage?: ErrorMessage
   EventKind?: EventKind
   EventMessage?: EventMessage
+  LikedIds?: LikedIds
   Me?: Me
   MemberView?: MemberView
   MembersMessage?: MembersMessage
@@ -143,6 +180,7 @@ export interface Protocol {
   QueueItem?: QueueItem
   QueueMessage?: QueueMessage
   QueueMove?: QueueMove
+  QueueOrigin?: QueueOrigin1
   QueueRemove?: QueueRemove
   QueueShuffle?: QueueShuffle
   'QueueSource-Input'?: QueueSourceInput
@@ -158,6 +196,7 @@ export interface Protocol {
   RoomEvent?: RoomEvent
   RoomInfo?: RoomInfo
   RoomInfoMessage?: RoomInfoMessage
+  RoomSettings?: RoomSettings1
   RoomSummary?: RoomSummary
   SearchResult?: SearchResult
   ServerMessage?: ServerMessage
@@ -169,7 +208,26 @@ export interface Protocol {
   SyncState?: SyncState1
   SyncStats?: SyncStats
   Track?: Track
+  TrackDislike?: TrackDislike
+  TrackLikes?: TrackLikes1
+  TrackLikesMessage?: TrackLikesMessage
   TrackList?: TrackList
+  WaveMessage?: WaveMessage
+  WaveMix?: WaveMix1
+  WaveMode?: WaveMode
+  WaveOption?: WaveOption
+  WaveOptionGroup?: WaveOptionGroup
+  WaveOptions?: WaveOptions
+  WavePin?: WavePin
+  WaveRemove?: WaveRemove
+  WaveSeed?: WaveSeed
+  WaveStart?: WaveStart
+  WaveStation?: WaveStation
+  WaveStatus?: WaveStatus1
+  WaveStop?: WaveStop
+  WaveStopReason?: WaveStopReason
+  WaveUpdateSettings?: WaveUpdateSettings
+  WaveView?: WaveView1
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -253,6 +311,8 @@ export interface PlaylistSummary {
   ownerName: string | null
   trackCount: number | null
   coverUrl: string | null
+  editable: boolean
+  externalUrl: string | null
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -457,6 +517,81 @@ export interface ReactionSend {
   emoji: string
 }
 /**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveStart".
+ */
+export interface WaveStart {
+  type: 'wave.start'
+  clientMsgId: string
+  mode: WaveMode
+  seed?: WaveSeed | null
+  /**
+   * @maxItems 5
+   */
+  settings?: string[]
+  expectedWaveId?: string | null
+}
+/**
+ * Зерно волны. Сид для API собирает сервер: сырую строку от клиента в Яндекс не передаём.
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveSeed".
+ */
+export interface WaveSeed {
+  kind: 'track' | 'artist' | 'album' | 'genre' | 'mood' | 'activity'
+  id: string
+  label: string
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveStop".
+ */
+export interface WaveStop {
+  type: 'wave.stop'
+  clientMsgId: string
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveUpdateSettings".
+ */
+export interface WaveUpdateSettings {
+  type: 'wave.update_settings'
+  clientMsgId: string
+  /**
+   * @maxItems 5
+   */
+  settings: string[]
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WavePin".
+ */
+export interface WavePin {
+  type: 'wave.pin'
+  clientMsgId: string
+  itemId: string
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveRemove".
+ */
+export interface WaveRemove {
+  type: 'wave.remove'
+  clientMsgId: string
+  itemId: string
+}
+/**
+ * «Не нравится»: пропуск трека волны, а у её владельца — ещё и дизлайк в его аккаунте.
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "TrackDislike".
+ */
+export interface TrackDislike {
+  type: 'track.dislike'
+  clientMsgId: string
+  expectedQueueItemId: string | null
+}
+/**
  * Сервер закрывает соединение: комната удалена, участника выгнали, сервер перезапускается.
  *
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -486,6 +621,7 @@ export interface Me {
   hasPlus: boolean
   provider: string
   providerConnected: boolean
+  waveLearning: boolean
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -531,6 +667,7 @@ export interface RoomEvent {
   positionMs: number | null
   repeat: RepeatMode | null
   source: QueueSourceOutput | null
+  reason: WaveStopReason | null
 }
 /**
  * Откуда добавлены треки — для события в ленте («37 треков из плейлиста X»).
@@ -541,6 +678,13 @@ export interface RoomEvent {
 export interface QueueSourceOutput {
   kind: 'album' | 'playlist' | 'artist' | 'liked' | 'search' | 'link' | 'history' | 'undo'
   title: string | null
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "LikedIds".
+ */
+export interface LikedIds {
+  trackIds: string[]
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -619,6 +763,16 @@ export interface QueueItem {
   track: Track
   addedBy: string
   addedAtMs: number
+  origin: QueueOrigin
+}
+/**
+ * Откуда элемент: добавлен вручную или пришёл из волны. Для подписи в плеере и списках.
+ */
+export interface QueueOrigin {
+  kind: 'manual' | 'wave'
+  ownerId: string | null
+  ownerName: string | null
+  seedLabel: string | null
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -640,6 +794,18 @@ export interface QueueState {
   upcoming: QueueItem[]
   history: QueueItem[]
   repeat: RepeatMode1
+}
+/**
+ * Откуда элемент: добавлен вручную или пришёл из волны. Для подписи в плеере и списках.
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "QueueOrigin".
+ */
+export interface QueueOrigin1 {
+  kind: 'manual' | 'wave'
+  ownerId: string | null
+  ownerName: string | null
+  seedLabel: string | null
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -701,6 +867,11 @@ export interface RoomInfo {
   slug: string
   name: string
   ownerId: string
+  settings: RoomSettings
+}
+export interface RoomSettings {
+  waveMix: WaveMix
+  announceLikes: boolean
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -709,6 +880,14 @@ export interface RoomInfo {
 export interface RoomInfoMessage {
   type: 'room'
   room: RoomInfo
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "RoomSettings".
+ */
+export interface RoomSettings1 {
+  waveMix: WaveMix
+  announceLikes: boolean
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -747,6 +926,71 @@ export interface Snapshot {
   stats: SyncStats
   events: RoomEvent[]
   chat: ChatMessage[]
+  wave: WaveView
+  trackLikes: TrackLikes
+}
+export interface WaveView {
+  version: number
+  waveId: string | null
+  status: WaveStatus
+  mode: WaveMode | null
+  ownerId: string | null
+  ownerName: string | null
+  ownerAway: boolean
+  seedLabel: string | null
+  settings: string[]
+  next: QueueItem[]
+  nextTrackId: string | null
+}
+/**
+ * Кто лайкнул текущий элемент очереди в этой комнате.
+ */
+export interface TrackLikes {
+  queueItemId: string | null
+  userIds: string[]
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveMessage".
+ */
+export interface WaveMessage {
+  type: 'wave'
+  wave: WaveView1
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveView".
+ */
+export interface WaveView1 {
+  version: number
+  waveId: string | null
+  status: WaveStatus
+  mode: WaveMode | null
+  ownerId: string | null
+  ownerName: string | null
+  ownerAway: boolean
+  seedLabel: string | null
+  settings: string[]
+  next: QueueItem[]
+  nextTrackId: string | null
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "TrackLikesMessage".
+ */
+export interface TrackLikesMessage {
+  type: 'track_likes'
+  likes: TrackLikes1
+}
+/**
+ * Кто лайкнул текущий элемент очереди в этой комнате.
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "TrackLikes".
+ */
+export interface TrackLikes1 {
+  queueItemId: string | null
+  userIds: string[]
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -774,4 +1018,40 @@ export interface StreamInfo {
   codec: string
   bitrate: number
   expiresAt: string | null
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveOption".
+ */
+export interface WaveOption {
+  seed: string
+  label: string
+  default: boolean
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveOptionGroup".
+ */
+export interface WaveOptionGroup {
+  key: string
+  options: WaveOption[]
+}
+/**
+ * Что можно выбрать в панели волны: настройки и станции для запуска по зерну.
+ *
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveOptions".
+ */
+export interface WaveOptions {
+  settings: WaveOptionGroup[]
+  stations: WaveStation[]
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveStation".
+ */
+export interface WaveStation {
+  kind: string
+  id: string
+  title: string
 }

@@ -88,7 +88,12 @@ async def room_socket(ws: WebSocket, slug: str) -> None:
     conn_id = secrets.token_urlsafe(8)
     structlog.contextvars.bind_contextvars(room=room.slug, conn_id=conn_id, user_id=user.id)
     ctx.hub.register(conn_id, ws)
-    room_user = RoomUser(id=user.id, name=user.display_name, avatar_url=user.avatar_url)
+    room_user = RoomUser(
+        id=user.id,
+        name=user.display_name,
+        avatar_url=user.avatar_url,
+        can_wave=user.has_plus,
+    )
     await room.join(conn_id, room_user)
     log.info("ws_connected")
     try:

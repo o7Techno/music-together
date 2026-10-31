@@ -13,9 +13,13 @@ from pydantic import Field, TypeAdapter
 from app.core.schema import ApiModel
 from app.rooms.playback import PlaybackState
 from app.rooms.queue import QueueState, RepeatMode
+from app.rooms.wave import RoomSettings, WaveMode, WaveSeed, WaveView
 
 MAX_BATCH_TRACKS = 500
 MAX_MESSAGE_BYTES = 64 * 1024
+WAVE_SETTINGS_LIMIT = 5
+
+WaveSetting = Annotated[str, Field(pattern=r"^setting[A-Za-z]+:[a-z-]{1,32}$")]
 
 # ── Клиент → сервер ─────────────────────────────────────────────────────────────
 
@@ -156,6 +160,47 @@ class ReactionSend(ApiModel):
     emoji: str = Field(min_length=1, max_length=16)
 
 
+class WaveStart(ApiModel):
+    type: Literal["wave.start"] = "wave.start"
+    client_msg_id: str
+    mode: WaveMode
+    seed: WaveSeed | None = None
+    settings: list[WaveSetting] = Field(default=[], max_length=WAVE_SETTINGS_LIMIT)
+    expected_wave_id: str | None = None
+    """Какую волну заменяем: два одновременных запуска не заменят друг друга молча."""
+
+
+class WaveStop(ApiModel):
+    type: Literal["wave.stop"] = "wave.stop"
+    client_msg_id: str
+
+
+class WaveUpdateSettings(ApiModel):
+    type: Literal["wave.update_settings"] = "wave.update_settings"
+    client_msg_id: str
+    settings: list[WaveSetting] = Field(max_length=WAVE_SETTINGS_LIMIT)
+
+
+class WavePin(ApiModel):
+    type: Literal["wave.pin"] = "wave.pin"
+    client_msg_id: str
+    item_id: str
+
+
+class WaveRemove(ApiModel):
+    type: Literal["wave.remove"] = "wave.remove"
+    client_msg_id: str
+    item_id: str
+
+
+class TrackDislike(ApiModel):
+    """«Не нравится»: пропуск трека волны, а у её владельца — ещё и дизлайк в его аккаунте."""
+
+    type: Literal["track.dislike"] = "track.dislike"
+    client_msg_id: str
+    expected_queue_item_id: str | None
+
+
 RoomCommand = (
     CmdPlay
     | CmdPause
@@ -170,6 +215,12 @@ RoomCommand = (
     | QueueClear
     | ChatSend
     | ReactionSend
+    | WaveStart
+    | WaveStop
+    | WaveUpdateSettings
+    | WavePin
+    | WaveRemove
+    | TrackDislike
 )
 """Команды, которые актор комнаты применяет синхронно (без I/O). `queue.add` резолвится отдельно."""
 
@@ -191,7 +242,13 @@ ClientMessage = Annotated[
     | QueueShuffle
     | QueueClear
     | ChatSend
-    | ReactionSend,
+    | ReactionSend
+    | WaveStart
+    | WaveStop
+    | WaveUpdateSettings
+    | WavePin
+    | WaveRemove
+    | TrackDislike,
     Field(discriminator="type"),
 ]
 client_message_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
@@ -204,6 +261,7 @@ class RoomInfo(ApiModel):
     slug: str
     name: str
     owner_id: str
+    settings: RoomSettings = RoomSettings()
 
 
 class MemberView(ApiModel):
@@ -245,6 +303,19 @@ class EventKind(StrEnum):
     REPEAT = "repeat"
     RENAMED = "renamed"
     KICKED = "kicked"
+    WAVE_STARTED = "wave_started"
+    WAVE_REPLACED = "wave_replaced"
+    WAVE_STOPPED = "wave_stopped"
+    WAVE_UNAVAILABLE = "wave_unavailable"
+    WAVE_RESUMED = "wave_resumed"
+    TRACK_LIKED = "track_liked"
+
+
+class WaveStopReason(StrEnum):
+    USER = "user"
+    OWNER_AWAY = "owner_away"
+    OWNER_GONE = "owner_gone"
+    AUTH = "auth"
 
 
 class RoomEvent(ApiModel):
@@ -258,6 +329,7 @@ class RoomEvent(ApiModel):
     position_ms: int | None = None
     repeat: RepeatMode | None = None
     source: QueueSource | None = None
+    reason: WaveStopReason | None = None
 
 
 class ChatMessage(ApiModel):
@@ -268,6 +340,13 @@ class ChatMessage(ApiModel):
     text: str | None = None
     emoji: str | None = None
     track_id: str | None = None
+
+
+class TrackLikes(ApiModel):
+    """Кто лайкнул текущий элемент очереди в этой комнате."""
+
+    queue_item_id: str | None = None
+    user_ids: list[str] = []
 
 
 class Pong(ApiModel):
@@ -287,6 +366,8 @@ class Snapshot(ApiModel):
     stats: SyncStats
     events: list[RoomEvent]
     chat: list[ChatMessage]
+    wave: WaveView = WaveView()
+    track_likes: TrackLikes = TrackLikes()
 
 
 class PlaybackMessage(ApiModel):
@@ -303,6 +384,16 @@ class MembersMessage(ApiModel):
     type: Literal["members"] = "members"
     members: list[MemberView]
     stats: SyncStats
+
+
+class WaveMessage(ApiModel):
+    type: Literal["wave"] = "wave"
+    wave: WaveView
+
+
+class TrackLikesMessage(ApiModel):
+    type: Literal["track_likes"] = "track_likes"
+    likes: TrackLikes
 
 
 class RoomInfoMessage(ApiModel):
@@ -355,6 +446,8 @@ ServerMessage = Annotated[
     | RoomInfoMessage
     | EventMessage
     | ChatMessageEnvelope
+    | WaveMessage
+    | TrackLikesMessage
     | Ack
     | ErrorMessage
     | Closed,

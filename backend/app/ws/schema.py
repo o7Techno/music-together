@@ -15,6 +15,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic.json_schema import JsonSchemaMode, models_json_schema
 
+from app.api.collection import LikedIds
 from app.api.music import ResolveResponse
 from app.api.schemas import (
     AuthConfig,
@@ -32,6 +33,7 @@ from app.providers.base import (
     SearchResult,
     StreamInfo,
     TrackList,
+    WaveOptions,
 )
 from app.ws import protocol
 
@@ -61,6 +63,8 @@ SERVER_MODELS: list[type[BaseModel]] = [
     ResolveResponse,
     DeviceStartResponse,
     DevicePollResponse,
+    LikedIds,
+    WaveOptions,
 ]
 
 

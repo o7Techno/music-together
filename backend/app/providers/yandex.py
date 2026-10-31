@@ -19,7 +19,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
-from yandex_music import ClientAsync
+from yandex_music import ClientAsync, SessionEvent, SessionFeedback
 from yandex_music.exceptions import (
     BadRequestError,
     NetworkError,
@@ -28,6 +28,7 @@ from yandex_music.exceptions import (
     UnauthorizedError,
     YandexMusicError,
 )
+from yandex_music.utils.difference import Difference
 from yandex_music.utils.request_async import Request
 
 from app.core.logging import get_logger
@@ -37,6 +38,7 @@ from app.providers.base import (
     ArtistRef,
     ArtistSummary,
     BestResult,
+    DuplicateTrackError,
     EntityKind,
     PlaylistSummary,
     ProviderAuthError,
@@ -49,6 +51,13 @@ from app.providers.base import (
     Track,
     TrackList,
     TrackUnavailableError,
+    WaveBatch,
+    WaveFeedback,
+    WaveOption,
+    WaveOptionGroup,
+    WaveOptions,
+    WaveSessionLostError,
+    WaveStation,
 )
 from app.providers.yandex_links import ParsedLink
 
@@ -66,6 +75,12 @@ CACHE_MAX_ENTRIES = 2000
 TRACKS_BATCH = 250
 LIKED_LIMIT = 2000
 PLAYLIST_LIMIT = 5000
+WAVE_OPTIONS_TTL_S = 15 * 60
+WAVE_QUEUE_LIMIT = 100
+WAVE_STATION_KINDS = ("mood", "activity", "genre")
+PLAYLIST_CHANGE_ATTEMPTS = 3
+PLAYLIST_DIFF_CHUNK = 100
+FEEDBACK_FROM = "music-together"
 _TS_IN_URL = re.compile(r"[,/]ts=([0-9a-f]{8,})")
 
 
@@ -92,6 +107,9 @@ class TTLCache:
         self._data.move_to_end(key)
         while len(self._data) > self._max:
             self._data.popitem(last=False)
+
+    def delete(self, key: str) -> None:
+        self._data.pop(key, None)
 
 
 # ── Маппинг моделей библиотеки ──────────────────────────────────────────────────
@@ -149,14 +167,48 @@ def playlist_ref(p: Any) -> str:
     return str(p.playlist_uuid)
 
 
-def map_playlist(p: Any) -> PlaylistSummary:
+def map_playlist(p: Any, uid: str | None = None) -> PlaylistSummary:
     owner = getattr(p, "owner", None)
+    owner_uid = str(owner.uid) if owner is not None and owner.uid is not None else None
+    url = (
+        f"https://music.yandex.ru/users/{owner_uid}/playlists/{p.kind}"
+        if owner_uid and p.kind is not None
+        else None
+    )
     return PlaylistSummary(
         ref=playlist_ref(p),
         title=p.title or "Плейлист",
         owner_name=(owner.name or owner.login) if owner is not None else None,
         track_count=p.track_count,
         cover_url=_cover(p),
+        editable=uid is not None and owner_uid == uid,
+        external_url=url,
+    )
+
+
+def map_wave_tracks(sequence: Iterable[Any] | None) -> list[Track]:
+    """Только настоящие треки, которые можно сыграть (реклама, пустые и без длительности — нет)."""
+    tracks: list[Track] = []
+    for item in sequence or []:
+        if getattr(item, "type", None) != "track":
+            continue
+        track = map_track(item.track)
+        if track is not None and track.available and track.duration_ms > 0:
+            tracks.append(track)
+    return tracks
+
+
+def wave_event(event: WaveFeedback) -> SessionFeedback:
+    timestamp = datetime.fromtimestamp(event.at_ms / 1000, tz=UTC)
+    return SessionFeedback(
+        SessionEvent(
+            event.kind.value,
+            timestamp.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            track_id=event.track_id,
+            total_played_seconds=event.played_s,
+        ),
+        event.batch_id,
+        FEEDBACK_FROM if event.kind.value == "radioStarted" else None,
     )
 
 
@@ -214,6 +266,7 @@ class YandexProvider:
         self._limiter = limiter
         self._refresher = refresher
         self._refreshed = False
+        self._playlist_locks: dict[str, asyncio.Lock] = {}
 
     # ── Политика запросов ───────────────────────────────────────────────────────
 
@@ -224,8 +277,11 @@ class YandexProvider:
             await asyncio.sleep(0.1)
         raise ProviderError("Слишком много запросов к Яндекс Музыке — подождите пару секунд.")
 
-    async def _call(self, op: Callable[[Any], Awaitable[T]]) -> T:
-        """Вызов библиотеки с ретраями на сеть/5xx и переводом ошибок."""
+    async def _call(self, op: Callable[[Any], Awaitable[T]], *, retry: bool = True) -> T:
+        """Вызов библиотеки с ретраями на сеть/5xx и переводом ошибок.
+
+        `retry=False` — для неидемпотентных изменений: сетевую ошибку получает вызывающий.
+        """
         attempt = 0
         while True:
             await self._throttle()
@@ -244,6 +300,8 @@ class YandexProvider:
             except BadRequestError as e:
                 raise ProviderNotFoundError from e
             except (TimedOutError, NetworkError) as e:
+                if not retry:
+                    raise
                 if attempt >= len(RETRY_DELAYS_S):
                     log.warning("yandex_unavailable", error=type(e).__name__)
                     raise ProviderError from e
@@ -411,7 +469,7 @@ class YandexProvider:
     async def get_user_playlists(self) -> list[PlaylistSummary]:
         async def load() -> list[PlaylistSummary]:
             lists = await self._call(lambda c: c.users_playlists_list(self.uid))
-            return [map_playlist(p) for p in lists or []]
+            return [map_playlist(p, self.uid) for p in lists or []]
 
         return await self._cached(self._private, "my-playlists", USER_TTL_S, load)
 
@@ -500,6 +558,223 @@ class YandexProvider:
             codec=best.codec,
             bitrate=int(best.bitrate_in_kbps or 0),
         )
+
+    # ── Волна ───────────────────────────────────────────────────────────────────
+
+    async def start_wave(
+        self, seeds: list[str], recent_ids: list[str], *, incognito: bool
+    ) -> WaveBatch:
+        queue = recent_ids[-WAVE_QUEUE_LIMIT:] or None
+        session = await self._call(
+            lambda c: c.rotor_session_new(seeds, queue=queue, incognito=incognito or None)
+        )
+        if session is None or not session.radio_session_id:
+            raise ProviderError("Яндекс Музыка не запустила волну.")
+        return WaveBatch(
+            session_id=session.radio_session_id,
+            batch_id=session.batch_id,
+            tracks=map_wave_tracks(session.sequence),
+        )
+
+    async def next_wave_tracks(self, session_id: str, recent_ids: list[str]) -> WaveBatch:
+        queue = recent_ids[-WAVE_QUEUE_LIMIT:]
+        batch = await self._call(lambda c: c.rotor_session_tracks(session_id, queue=queue))
+        if batch is None or batch.unknown_session or batch.terminated:
+            raise WaveSessionLostError
+        return WaveBatch(
+            session_id=session_id,
+            batch_id=batch.batch_id,
+            tracks=map_wave_tracks(batch.sequence),
+        )
+
+    async def send_wave_feedback(self, session_id: str, events: list[WaveFeedback]) -> None:
+        if not events:
+            return
+        feedbacks = [wave_event(e) for e in events]
+        await self._call(lambda c: c.rotor_session_feedbacks(session_id, feedbacks))
+
+    async def get_wave_options(self) -> WaveOptions:
+        async def load() -> WaveOptions:
+            settings, stations = await asyncio.gather(
+                self._call(lambda c: c.rotor_wave_settings("user:onyourwave")),
+                self._call(lambda c: c.rotor_stations_list()),
+            )
+            return WaveOptions(
+                settings=_wave_setting_groups(settings), stations=_wave_stations(stations)
+            )
+
+        return await self._cached(self._private, "wave-options", WAVE_OPTIONS_TTL_S, load)
+
+    # ── Личная коллекция ────────────────────────────────────────────────────────
+    # `account_uid` у клиента пуст (init не вызывается), поэтому `user_id` передаётся всегда.
+
+    async def get_liked_track_ids(self) -> set[str]:
+        async def load() -> set[str]:
+            likes = await self._call(lambda c: c.users_likes_tracks(self.uid))
+            return {str(s.track_id).split(":")[0] for s in (likes.tracks if likes else [])}
+
+        return await self._cached(self._private, "liked-ids", USER_TTL_S, load)
+
+    def _forget_likes(self) -> None:
+        self._private.delete("liked-ids")
+        self._private.delete("liked")
+
+    async def like_track(self, track_id: str) -> None:
+        await self._call(lambda c: c.users_likes_tracks_add(track_id, user_id=self.uid))
+        self._forget_likes()
+
+    async def unlike_track(self, track_id: str) -> None:
+        await self._call(lambda c: c.users_likes_tracks_remove(track_id, user_id=self.uid))
+        self._forget_likes()
+
+    async def dislike_track(self, track_id: str) -> None:
+        await self._call(lambda c: c.users_dislikes_tracks_add(track_id, user_id=self.uid))
+        self._forget_likes()
+
+    def _own_kind(self, ref: str) -> int:
+        owner, _, kind = ref.partition(":")
+        if owner != self.uid or not kind.isdigit():
+            raise ProviderNotFoundError("Это не ваш плейлист.")
+        return int(kind)
+
+    def _forget_playlist(self, ref: str) -> None:
+        self._private.delete("my-playlists")
+        self._private.delete(f"playlist:{ref}")
+
+    async def create_playlist(self, title: str) -> PlaylistSummary:
+        # У библиотеки по умолчанию `public`: сборка из комнаты не должна становиться публичной.
+        playlist = await self._call(
+            lambda c: c.users_playlists_create(title, visibility="private", user_id=self.uid),
+            retry=False,
+        )
+        if playlist is None:
+            raise ProviderError("Не удалось создать плейлист.")
+        self._private.delete("my-playlists")
+        return map_playlist(playlist, self.uid)
+
+    async def _change_playlist(
+        self, ref: str, build: Callable[[Any], list[Difference]]
+    ) -> PlaylistSummary:
+        """Применить изменения к свежей ревизии: конфликт — перечитать и повторить.
+
+        Запрос с неясным исходом (таймаут) вслепую не повторяем: если ревизия выросла, он дошёл.
+        API принимает дубликаты молча, поэтому повтор мог бы вставить трек дважды.
+        """
+        kind = self._own_kind(ref)
+        async with self._playlist_locks.setdefault(ref, asyncio.Lock()):
+            unclear_at: int | None = None
+            for _ in range(PLAYLIST_CHANGE_ATTEMPTS):
+                playlist = await self._call(lambda c: c.users_playlists(kind, self.uid))
+                if playlist is None:
+                    raise ProviderNotFoundError
+                revision = playlist.revision or 1
+                if unclear_at is not None and revision > unclear_at:
+                    self._forget_playlist(ref)
+                    return map_playlist(playlist, self.uid)
+                unclear_at = None
+                try:
+                    for diff in build(playlist):
+                        unclear_at = revision
+                        changed = await self._send_playlist_diff(kind, diff, revision)
+                        unclear_at = None
+                        revision = changed.revision if changed.revision else revision + 1
+                        playlist = changed
+                except TimedOutError:
+                    continue
+                except NetworkError as e:
+                    unclear_at = None
+                    if "wrong-revision" in str(e):
+                        continue
+                    raise ProviderError from e
+                self._forget_playlist(ref)
+                return map_playlist(playlist, self.uid)
+        raise ProviderError("Плейлист часто меняется — попробуйте ещё раз.")
+
+    async def _send_playlist_diff(self, kind: int, diff: Difference, revision: int) -> Any:
+        changed = await self._call(
+            lambda c: c.users_playlists_change(kind, diff.to_json(), revision, user_id=self.uid),
+            retry=False,
+        )
+        if changed is None:
+            raise ProviderError
+        return changed
+
+    async def add_to_playlist(
+        self, ref: str, track_ids: list[str], *, allow_duplicate: bool
+    ) -> PlaylistSummary:
+        tracks = await self.get_tracks(track_ids)
+        with_album = [t for t in tracks if t.album_id]
+        if not with_album:
+            raise TrackUnavailableError("Этот трек нельзя добавить в плейлист: у него нет альбома.")
+
+        def build(playlist: Any) -> list[Difference]:
+            existing = {_short_track_id(s) for s in playlist.tracks or []}
+            chosen = with_album
+            if not allow_duplicate:
+                chosen = [t for t in with_album if t.id not in existing]
+                if not chosen:
+                    raise DuplicateTrackError
+            at = int(playlist.track_count or 0)
+            diffs: list[Difference] = []
+            for start in range(0, len(chosen), PLAYLIST_DIFF_CHUNK):
+                part = chosen[start : start + PLAYLIST_DIFF_CHUNK]
+                rows: list[dict[str, str | int]] = [
+                    {"id": t.id, "album_id": str(t.album_id)} for t in part
+                ]
+                diffs.append(Difference().add_insert(at + start, rows))
+            return diffs
+
+        return await self._change_playlist(ref, build)
+
+    async def remove_from_playlist(self, ref: str, track_id: str) -> PlaylistSummary:
+        def build(playlist: Any) -> list[Difference]:
+            ids = [_short_track_id(s) for s in playlist.tracks or []]
+            if track_id not in ids:
+                raise ProviderNotFoundError("Этого трека уже нет в плейлисте.")
+            index = ids.index(track_id)
+            # Граница `to` не включается (docs/wave-spike.md).
+            return [Difference().add_delete(index, index + 1)]
+
+        return await self._change_playlist(ref, build)
+
+
+def _short_track_id(short: Any) -> str:
+    return str(getattr(short, "id", "") or "").split(":")[0]
+
+
+def _wave_setting_groups(settings: Any) -> list[WaveOptionGroup]:
+    restrictions = settings.setting_restrictions if settings is not None else None
+    if restrictions is None:
+        return []
+    groups: list[WaveOptionGroup] = []
+    for key, value in restrictions.to_dict().items():
+        if not isinstance(value, dict):
+            continue
+        options = [
+            WaveOption(
+                seed=v["serialized_seed"],
+                label=str(v.get("name") or v["serialized_seed"]),
+                default=bool(v.get("unspecified")),
+            )
+            for v in value.get("possible_values") or []
+            if isinstance(v, dict) and v.get("serialized_seed")
+        ]
+        if options:
+            groups.append(WaveOptionGroup(key=key, options=options))
+    return groups
+
+
+def _wave_stations(stations: Iterable[Any] | None) -> list[WaveStation]:
+    result: list[WaveStation] = []
+    for item in stations or []:
+        station = item.station
+        ident = station.id if station is not None else None
+        if ident is None or ident.type not in WAVE_STATION_KINDS or not ident.tag:
+            continue
+        result.append(
+            WaveStation(kind=ident.type, id=str(ident.tag), title=station.name or str(ident.tag))
+        )
+    return result
 
 
 def token_fingerprint(token: str) -> str:

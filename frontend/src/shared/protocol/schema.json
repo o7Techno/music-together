@@ -86,6 +86,9 @@
     "EventMessage": {
       "$ref": "#/$defs/EventMessage"
     },
+    "LikedIds": {
+      "$ref": "#/$defs/LikedIds"
+    },
     "Me": {
       "$ref": "#/$defs/Me"
     },
@@ -127,6 +130,9 @@
     },
     "QueueMove": {
       "$ref": "#/$defs/QueueMove"
+    },
+    "QueueOrigin": {
+      "$ref": "#/$defs/QueueOrigin"
     },
     "QueueRemove": {
       "$ref": "#/$defs/QueueRemove"
@@ -173,6 +179,9 @@
     "RoomInfoMessage": {
       "$ref": "#/$defs/RoomInfoMessage"
     },
+    "RoomSettings": {
+      "$ref": "#/$defs/RoomSettings"
+    },
     "RoomSummary": {
       "$ref": "#/$defs/RoomSummary"
     },
@@ -206,8 +215,65 @@
     "Track": {
       "$ref": "#/$defs/Track"
     },
+    "TrackDislike": {
+      "$ref": "#/$defs/TrackDislike"
+    },
+    "TrackLikes": {
+      "$ref": "#/$defs/TrackLikes"
+    },
+    "TrackLikesMessage": {
+      "$ref": "#/$defs/TrackLikesMessage"
+    },
     "TrackList": {
       "$ref": "#/$defs/TrackList"
+    },
+    "WaveMessage": {
+      "$ref": "#/$defs/WaveMessage"
+    },
+    "WaveMix": {
+      "$ref": "#/$defs/WaveMix"
+    },
+    "WaveMode": {
+      "$ref": "#/$defs/WaveMode"
+    },
+    "WaveOption": {
+      "$ref": "#/$defs/WaveOption"
+    },
+    "WaveOptionGroup": {
+      "$ref": "#/$defs/WaveOptionGroup"
+    },
+    "WaveOptions": {
+      "$ref": "#/$defs/WaveOptions"
+    },
+    "WavePin": {
+      "$ref": "#/$defs/WavePin"
+    },
+    "WaveRemove": {
+      "$ref": "#/$defs/WaveRemove"
+    },
+    "WaveSeed": {
+      "$ref": "#/$defs/WaveSeed"
+    },
+    "WaveStart": {
+      "$ref": "#/$defs/WaveStart"
+    },
+    "WaveStation": {
+      "$ref": "#/$defs/WaveStation"
+    },
+    "WaveStatus": {
+      "$ref": "#/$defs/WaveStatus"
+    },
+    "WaveStop": {
+      "$ref": "#/$defs/WaveStop"
+    },
+    "WaveStopReason": {
+      "$ref": "#/$defs/WaveStopReason"
+    },
+    "WaveUpdateSettings": {
+      "$ref": "#/$defs/WaveUpdateSettings"
+    },
+    "WaveView": {
+      "$ref": "#/$defs/WaveView"
     }
   },
   "$defs": {
@@ -565,7 +631,13 @@
           "queue.move": "#/$defs/QueueMove",
           "queue.remove": "#/$defs/QueueRemove",
           "queue.shuffle": "#/$defs/QueueShuffle",
-          "ready": "#/$defs/Ready"
+          "ready": "#/$defs/Ready",
+          "track.dislike": "#/$defs/TrackDislike",
+          "wave.pin": "#/$defs/WavePin",
+          "wave.remove": "#/$defs/WaveRemove",
+          "wave.start": "#/$defs/WaveStart",
+          "wave.stop": "#/$defs/WaveStop",
+          "wave.update_settings": "#/$defs/WaveUpdateSettings"
         },
         "propertyName": "type"
       },
@@ -623,6 +695,24 @@
         },
         {
           "$ref": "#/$defs/ReactionSend"
+        },
+        {
+          "$ref": "#/$defs/WaveStart"
+        },
+        {
+          "$ref": "#/$defs/WaveStop"
+        },
+        {
+          "$ref": "#/$defs/WaveUpdateSettings"
+        },
+        {
+          "$ref": "#/$defs/WavePin"
+        },
+        {
+          "$ref": "#/$defs/WaveRemove"
+        },
+        {
+          "$ref": "#/$defs/TrackDislike"
         }
       ],
       "title": "ClientMessage"
@@ -1026,7 +1116,13 @@
         "queue_clear",
         "repeat",
         "renamed",
-        "kicked"
+        "kicked",
+        "wave_started",
+        "wave_replaced",
+        "wave_stopped",
+        "wave_unavailable",
+        "wave_resumed",
+        "track_liked"
       ],
       "type": "string",
       "title": "EventKind"
@@ -1049,6 +1145,22 @@
       ],
       "type": "object",
       "title": "EventMessage"
+    },
+    "LikedIds": {
+      "additionalProperties": false,
+      "properties": {
+        "trackIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "trackIds"
+      ],
+      "type": "object",
+      "title": "LikedIds"
     },
     "Me": {
       "additionalProperties": false,
@@ -1080,6 +1192,10 @@
         },
         "providerConnected": {
           "type": "boolean"
+        },
+        "waveLearning": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
@@ -1089,7 +1205,8 @@
         "avatarUrl",
         "hasPlus",
         "provider",
-        "providerConnected"
+        "providerConnected",
+        "waveLearning"
       ],
       "type": "object",
       "title": "Me"
@@ -1356,6 +1473,21 @@
             }
           ],
           "default": null
+        },
+        "editable": {
+          "default": false,
+          "type": "boolean"
+        },
+        "externalUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1363,7 +1495,9 @@
         "title",
         "ownerName",
         "trackCount",
-        "coverUrl"
+        "coverUrl",
+        "editable",
+        "externalUrl"
       ],
       "type": "object",
       "title": "PlaylistSummary"
@@ -1479,13 +1613,23 @@
         },
         "addedAtMs": {
           "type": "integer"
+        },
+        "origin": {
+          "$ref": "#/$defs/QueueOrigin",
+          "default": {
+            "kind": "manual",
+            "ownerId": null,
+            "ownerName": null,
+            "seedLabel": null
+          }
         }
       },
       "required": [
         "id",
         "track",
         "addedBy",
-        "addedAtMs"
+        "addedAtMs",
+        "origin"
       ],
       "type": "object",
       "title": "QueueItem"
@@ -1536,6 +1680,61 @@
       ],
       "type": "object",
       "title": "QueueMove"
+    },
+    "QueueOrigin": {
+      "additionalProperties": false,
+      "description": "Откуда элемент: добавлен вручную или пришёл из волны. Для подписи в плеере и списках.",
+      "properties": {
+        "kind": {
+          "default": "manual",
+          "enum": [
+            "manual",
+            "wave"
+          ],
+          "type": "string"
+        },
+        "ownerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownerName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seedLabel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind",
+        "ownerId",
+        "ownerName",
+        "seedLabel"
+      ],
+      "type": "object",
+      "title": "QueueOrigin"
     },
     "QueueRemove": {
       "additionalProperties": false,
@@ -1930,6 +2129,17 @@
             }
           ],
           "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaveStopReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1942,7 +2152,8 @@
         "title",
         "positionMs",
         "repeat",
-        "source"
+        "source",
+        "reason"
       ],
       "type": "object",
       "title": "RoomEvent"
@@ -1961,13 +2172,21 @@
         },
         "ownerId": {
           "type": "string"
+        },
+        "settings": {
+          "$ref": "#/$defs/RoomSettings",
+          "default": {
+            "waveMix": "manual_first",
+            "announceLikes": true
+          }
         }
       },
       "required": [
         "id",
         "slug",
         "name",
-        "ownerId"
+        "ownerId",
+        "settings"
       ],
       "type": "object",
       "title": "RoomInfo"
@@ -1990,6 +2209,25 @@
       ],
       "type": "object",
       "title": "RoomInfoMessage"
+    },
+    "RoomSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "waveMix": {
+          "$ref": "#/$defs/WaveMix",
+          "default": "manual_first"
+        },
+        "announceLikes": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "waveMix",
+        "announceLikes"
+      ],
+      "type": "object",
+      "title": "RoomSettings"
     },
     "RoomSummary": {
       "additionalProperties": false,
@@ -2096,7 +2334,9 @@
           "pong": "#/$defs/Pong",
           "queue": "#/$defs/QueueMessage",
           "room": "#/$defs/RoomInfoMessage",
-          "snapshot": "#/$defs/Snapshot"
+          "snapshot": "#/$defs/Snapshot",
+          "track_likes": "#/$defs/TrackLikesMessage",
+          "wave": "#/$defs/WaveMessage"
         },
         "propertyName": "type"
       },
@@ -2124,6 +2364,12 @@
         },
         {
           "$ref": "#/$defs/ChatMessageEnvelope"
+        },
+        {
+          "$ref": "#/$defs/WaveMessage"
+        },
+        {
+          "$ref": "#/$defs/TrackLikesMessage"
         },
         {
           "$ref": "#/$defs/Ack"
@@ -2213,6 +2459,29 @@
             "$ref": "#/$defs/ChatMessage"
           },
           "type": "array"
+        },
+        "wave": {
+          "$ref": "#/$defs/WaveView",
+          "default": {
+            "version": 0,
+            "waveId": null,
+            "status": "off",
+            "mode": null,
+            "ownerId": null,
+            "ownerName": null,
+            "ownerAway": false,
+            "seedLabel": null,
+            "settings": [],
+            "next": [],
+            "nextTrackId": null
+          }
+        },
+        "trackLikes": {
+          "$ref": "#/$defs/TrackLikes",
+          "default": {
+            "queueItemId": null,
+            "userIds": []
+          }
         }
       },
       "required": [
@@ -2225,7 +2494,9 @@
         "members",
         "stats",
         "events",
-        "chat"
+        "chat",
+        "wave",
+        "trackLikes"
       ],
       "type": "object",
       "title": "Snapshot"
@@ -2407,6 +2678,86 @@
       "type": "object",
       "title": "Track"
     },
+    "TrackDislike": {
+      "additionalProperties": false,
+      "description": "«Не нравится»: пропуск трека волны, а у её владельца — ещё и дизлайк в его аккаунте.",
+      "properties": {
+        "type": {
+          "const": "track.dislike",
+          "default": "track.dislike",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "expectedQueueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "expectedQueueItemId"
+      ],
+      "type": "object",
+      "title": "TrackDislike"
+    },
+    "TrackLikes": {
+      "additionalProperties": false,
+      "description": "Кто лайкнул текущий элемент очереди в этой комнате.",
+      "properties": {
+        "queueItemId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "userIds": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "queueItemId",
+        "userIds"
+      ],
+      "type": "object",
+      "title": "TrackLikes"
+    },
+    "TrackLikesMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "track_likes",
+          "default": "track_likes",
+          "type": "string"
+        },
+        "likes": {
+          "$ref": "#/$defs/TrackLikes"
+        }
+      },
+      "required": [
+        "type",
+        "likes"
+      ],
+      "type": "object",
+      "title": "TrackLikesMessage"
+    },
     "TrackList": {
       "additionalProperties": false,
       "description": "Набор треков сущности (альбом, плейлист, артист, «Мне нравится»).",
@@ -2475,6 +2826,443 @@
       ],
       "type": "object",
       "title": "TrackList"
+    },
+    "WaveMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave",
+          "default": "wave",
+          "type": "string"
+        },
+        "wave": {
+          "$ref": "#/$defs/WaveView"
+        }
+      },
+      "required": [
+        "type",
+        "wave"
+      ],
+      "type": "object",
+      "title": "WaveMessage"
+    },
+    "WaveMix": {
+      "enum": [
+        "manual_first",
+        "alternate"
+      ],
+      "type": "string",
+      "title": "WaveMix"
+    },
+    "WaveMode": {
+      "enum": [
+        "personal",
+        "seed"
+      ],
+      "type": "string",
+      "title": "WaveMode"
+    },
+    "WaveOption": {
+      "additionalProperties": false,
+      "properties": {
+        "seed": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "default": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "seed",
+        "label",
+        "default"
+      ],
+      "type": "object",
+      "title": "WaveOption"
+    },
+    "WaveOptionGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/WaveOption"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "options"
+      ],
+      "type": "object",
+      "title": "WaveOptionGroup"
+    },
+    "WaveOptions": {
+      "additionalProperties": false,
+      "description": "Что можно выбрать в панели волны: настройки и станции для запуска по зерну.",
+      "properties": {
+        "settings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WaveOptionGroup"
+          },
+          "type": "array"
+        },
+        "stations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WaveStation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "settings",
+        "stations"
+      ],
+      "type": "object",
+      "title": "WaveOptions"
+    },
+    "WavePin": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.pin",
+          "default": "wave.pin",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId"
+      ],
+      "type": "object",
+      "title": "WavePin"
+    },
+    "WaveRemove": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.remove",
+          "default": "wave.remove",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "itemId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "itemId"
+      ],
+      "type": "object",
+      "title": "WaveRemove"
+    },
+    "WaveSeed": {
+      "additionalProperties": false,
+      "description": "Зерно волны. Сид для API собирает сервер: сырую строку от клиента в Яндекс не передаём.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "track",
+            "artist",
+            "album",
+            "genre",
+            "mood",
+            "activity"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[\\w-]{1,64}$",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "label"
+      ],
+      "type": "object",
+      "title": "WaveSeed"
+    },
+    "WaveStart": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.start",
+          "default": "wave.start",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/WaveMode"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaveSeed"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "settings": {
+          "default": [],
+          "items": {
+            "pattern": "^setting[A-Za-z]+:[a-z-]{1,32}$",
+            "type": "string"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
+        "expectedWaveId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "mode"
+      ],
+      "type": "object",
+      "title": "WaveStart"
+    },
+    "WaveStation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "title"
+      ],
+      "type": "object",
+      "title": "WaveStation"
+    },
+    "WaveStatus": {
+      "enum": [
+        "off",
+        "starting",
+        "playing",
+        "waiting",
+        "unavailable"
+      ],
+      "type": "string",
+      "title": "WaveStatus"
+    },
+    "WaveStop": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.stop",
+          "default": "wave.stop",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId"
+      ],
+      "type": "object",
+      "title": "WaveStop"
+    },
+    "WaveStopReason": {
+      "enum": [
+        "user",
+        "owner_away",
+        "owner_gone",
+        "auth"
+      ],
+      "type": "string",
+      "title": "WaveStopReason"
+    },
+    "WaveUpdateSettings": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.update_settings",
+          "default": "wave.update_settings",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "settings": {
+          "items": {
+            "pattern": "^setting[A-Za-z]+:[a-z-]{1,32}$",
+            "type": "string"
+          },
+          "maxItems": 5,
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "settings"
+      ],
+      "type": "object",
+      "title": "WaveUpdateSettings"
+    },
+    "WaveView": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "default": 0,
+          "type": "integer"
+        },
+        "waveId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/WaveStatus",
+          "default": "off"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WaveMode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownerId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownerName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownerAway": {
+          "default": false,
+          "type": "boolean"
+        },
+        "seedLabel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "settings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "next": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QueueItem"
+          },
+          "type": "array"
+        },
+        "nextTrackId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "version",
+        "waveId",
+        "status",
+        "mode",
+        "ownerId",
+        "ownerName",
+        "ownerAway",
+        "seedLabel",
+        "settings",
+        "next",
+        "nextTrackId"
+      ],
+      "type": "object",
+      "title": "WaveView"
     }
   }
 }

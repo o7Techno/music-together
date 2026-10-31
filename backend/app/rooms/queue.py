@@ -6,6 +6,7 @@ import random
 import secrets
 from collections import deque
 from enum import StrEnum
+from typing import Literal
 
 from app.core.errors import NotFoundError, ValidationError
 from app.core.schema import ApiModel
@@ -21,11 +22,21 @@ class RepeatMode(StrEnum):
     TRACK = "track"
 
 
+class QueueOrigin(ApiModel):
+    """Откуда элемент: добавлен вручную или пришёл из волны. Для подписи в плеере и списках."""
+
+    kind: Literal["manual", "wave"] = "manual"
+    owner_id: str | None = None
+    owner_name: str | None = None
+    seed_label: str | None = None
+
+
 class QueueItem(ApiModel):
     id: str
     track: Track
     added_by: str
     added_at_ms: int
+    origin: QueueOrigin = QueueOrigin()
 
 
 class QueueState(ApiModel):

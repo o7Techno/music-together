@@ -13,6 +13,7 @@ from app.core.ratelimit import RateLimiter
 from app.db.session import Database
 from app.providers.factory import ProviderFactory
 from app.rooms.manager import RoomManager
+from app.rooms.wave_driver import ProviderWaveDriver
 from app.ws.hub import ConnectionHub
 
 
@@ -27,6 +28,8 @@ class AppContext:
     cipher: TokenCipher | None
     search_limiter: RateLimiter
     stream_limiter: RateLimiter
+    collection_limiter: RateLimiter
     login_limiter: RateLimiter
     yandex_auth: YandexAuth | None
     device_flows: DeviceFlowStore
+    wave_driver: ProviderWaveDriver | None = None

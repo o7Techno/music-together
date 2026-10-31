@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Response
 
 from app.api.deps import Ctx, CurrentUser, Db, current_user, set_session_cookie
 from app.api.schemas import AuthConfig, DevLoginRequest, Me, SessionInfo
-from app.auth.sessions import COOKIE_NAME, create_session, delete_session
+from app.auth.sessions import COOKIE_NAME, create_session, delete_session, resolve_session
 from app.core.config import MusicProviderKind
 from app.core.errors import ForbiddenError, UnauthorizedError
 from app.db.models import User
@@ -65,5 +65,9 @@ async def session(request: Request, response: Response, ctx: Ctx, db: Db) -> Ses
 async def logout(request: Request, response: Response, ctx: Ctx, db: Db) -> None:
     raw = request.cookies.get(COOKIE_NAME)
     if raw:
-        await delete_session(db, raw, ctx.settings.session_secret.get_secret_value())
+        secret = ctx.settings.session_secret.get_secret_value()
+        resolved = await resolve_session(db, raw, secret)
+        await delete_session(db, raw, secret)
+        if resolved is not None:
+            await ctx.rooms.stop_waves_of(resolved[0].id)
     response.delete_cookie(COOKIE_NAME, path="/")

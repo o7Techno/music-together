@@ -124,7 +124,7 @@ class Socket:
     async def send(self, msg: dict[str, Any]) -> str:
         self._n += 1
         msg_id = f"m{self._n}"
-        if msg["type"].startswith(("cmd.", "queue.", "chat.")):
+        if msg["type"].startswith(("cmd.", "queue.", "chat.", "wave.", "track.")):
             msg = {"clientMsgId": msg_id, **msg}
         await self.conn.send(json.dumps(msg))
         return msg_id

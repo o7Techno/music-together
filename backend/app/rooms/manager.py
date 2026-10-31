@@ -17,8 +17,9 @@ from app.db import models
 from app.db.session import Database
 from app.rooms.playback import PlaybackState
 from app.rooms.queue import QueueState
-from app.rooms.room import Outbox, Room
+from app.rooms.room import Outbox, Room, WaveDriver
 from app.rooms.timers import Timers
+from app.rooms.wave import OWNER_GRACE_MS, RoomSettings, WaveState
 from app.ws.protocol import CloseReason
 
 log = get_logger(__name__)
@@ -28,7 +29,18 @@ IDLE_EVICT_S = 30 * 60
 
 
 class RoomManager:
-    def __init__(self, db: Database, clock: Clock, timers: Timers, outbox: Outbox) -> None:
+    def __init__(
+        self,
+        db: Database,
+        clock: Clock,
+        timers: Timers,
+        outbox: Outbox,
+        *,
+        wave_driver: WaveDriver | None = None,
+        owner_grace_ms: int = OWNER_GRACE_MS,
+    ) -> None:
+        self._wave_driver = wave_driver
+        self._owner_grace_ms = owner_grace_ms
         self._db = db
         self._clock = clock
         self._timers = timers
@@ -65,6 +77,16 @@ class RoomManager:
                 queue = QueueState.model_validate(record.state["queue"])
         except PydanticValidationError:
             log.exception("room_state_corrupted", room=record.slug)
+        wave: WaveState | None = None
+        settings: RoomSettings | None = None
+        try:
+            # Отдельно от очереди: повреждённая волна не должна терять очередь.
+            if "wave" in record.state:
+                wave = WaveState.model_validate(record.state["wave"])
+            if "settings" in record.state:
+                settings = RoomSettings.model_validate(record.state["settings"])
+        except PydanticValidationError:
+            log.exception("room_wave_state_corrupted", room=record.slug)
         return Room(
             room_id=record.id,
             slug=record.slug,
@@ -76,6 +98,10 @@ class RoomManager:
             playback=playback,
             queue=queue,
             on_change=self._schedule_save,
+            wave=wave,
+            settings=settings,
+            wave_driver=self._wave_driver,
+            owner_grace_ms=self._owner_grace_ms,
         )
 
     # ── Сохранение ──────────────────────────────────────────────────────────────
@@ -95,6 +121,8 @@ class RoomManager:
             state = {
                 "playback": room.persisted_playback().model_dump(mode="json", by_alias=False),
                 "queue": room.queue.snapshot().model_dump(mode="json", by_alias=False),
+                "wave": room.persisted_wave().model_dump(mode="json", by_alias=False),
+                "settings": room.settings.model_dump(mode="json", by_alias=False),
             }
             name = room.name
         try:
@@ -131,6 +159,11 @@ class RoomManager:
         for room in self._rooms.values():
             async with room.lock:
                 room.close_all(CloseReason.RESTART)
+
+    async def stop_waves_of(self, user_id: str) -> None:
+        """Пользователь вышел из аккаунта: его волны останавливаются сразу (SPEC-wave §7)."""
+        for room in list(self._rooms.values()):
+            await room.stop_wave_of(user_id)
 
     async def evict_idle(self) -> int:
         """Выгрузить из памяти комнаты без подключений дольше IDLE_EVICT_S."""

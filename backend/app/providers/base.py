@@ -56,6 +56,10 @@ class PlaylistSummary(ApiModel):
     owner_name: str | None = None
     track_count: int | None = None
     cover_url: str | None = None
+    editable: bool = False
+    """Пользователь может менять этот плейлист (он его владелец)."""
+    external_url: str | None = None
+    """Ссылка на плейлист в самом сервисе, если она есть."""
 
 
 class EntityKind(StrEnum):
@@ -114,6 +118,56 @@ class StreamInfo(ApiModel):
     expires_at: datetime | None = None
 
 
+class WaveBatch(ApiModel):
+    """Порция треков волны. `session_id` и `batch_id` остаются на сервере и клиентам не уходят."""
+
+    session_id: str
+    batch_id: str | None = None
+    tracks: list[Track]
+
+
+class WaveFeedbackKind(StrEnum):
+    RADIO_STARTED = "radioStarted"
+    TRACK_STARTED = "trackStarted"
+    TRACK_FINISHED = "trackFinished"
+    SKIP = "skip"
+    LIKE = "like"
+    UNLIKE = "unlike"
+    DISLIKE = "dislike"
+
+
+class WaveFeedback(ApiModel):
+    kind: WaveFeedbackKind
+    at_ms: int
+    track_id: str | None = None
+    played_s: float | None = None
+    batch_id: str | None = None
+
+
+class WaveOption(ApiModel):
+    seed: str
+    label: str
+    default: bool = False
+
+
+class WaveOptionGroup(ApiModel):
+    key: str
+    options: list[WaveOption]
+
+
+class WaveStation(ApiModel):
+    kind: str
+    id: str
+    title: str
+
+
+class WaveOptions(ApiModel):
+    """Что можно выбрать в панели волны: настройки и станции для запуска по зерну."""
+
+    settings: list[WaveOptionGroup] = []
+    stations: list[WaveStation] = []
+
+
 class UserProfile(ApiModel):
     external_id: str
     login: str
@@ -155,6 +209,19 @@ class ProviderNotFoundError(ProviderError):
     default_message = "Не нашли такой трек, альбом или плейлист."
 
 
+class WaveSessionLostError(ProviderError):
+    """Сессия волны больше не существует: нужно создать новую."""
+
+    code = "wave_session_lost"
+    default_message = "Сессия волны завершилась."
+
+
+class DuplicateTrackError(ProviderError):
+    code = "duplicate"
+    status_code = 409
+    default_message = "Этот трек уже есть в плейлисте."
+
+
 class MusicProvider(Protocol):
     async def search(self, query: str) -> SearchResult: ...
 
@@ -175,3 +242,29 @@ class MusicProvider(Protocol):
     async def get_stream(self, track_id: str) -> StreamInfo: ...
 
     async def resolve(self, link: ParsedLink) -> TrackList: ...
+
+    async def start_wave(
+        self, seeds: list[str], recent_ids: list[str], *, incognito: bool
+    ) -> WaveBatch: ...
+
+    async def next_wave_tracks(self, session_id: str, recent_ids: list[str]) -> WaveBatch: ...
+
+    async def send_wave_feedback(self, session_id: str, events: list[WaveFeedback]) -> None: ...
+
+    async def get_wave_options(self) -> WaveOptions: ...
+
+    async def get_liked_track_ids(self) -> set[str]: ...
+
+    async def like_track(self, track_id: str) -> None: ...
+
+    async def unlike_track(self, track_id: str) -> None: ...
+
+    async def dislike_track(self, track_id: str) -> None: ...
+
+    async def create_playlist(self, title: str) -> PlaylistSummary: ...
+
+    async def add_to_playlist(
+        self, ref: str, track_ids: list[str], *, allow_duplicate: bool
+    ) -> PlaylistSummary: ...
+
+    async def remove_from_playlist(self, ref: str, track_id: str) -> PlaylistSummary: ...

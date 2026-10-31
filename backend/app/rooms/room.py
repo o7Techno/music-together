@@ -24,18 +24,50 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from app.core.clock import Clock
-from app.core.errors import ConflictError, ForbiddenError, RateLimitedError, ValidationError
+from app.core.errors import (
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitedError,
+    ValidationError,
+)
 from app.core.logging import get_logger
 from app.core.ratelimit import RateLimiter
-from app.providers.base import Track
+from app.providers.base import (
+    SubscriptionRequiredError,
+    Track,
+    WaveBatch,
+    WaveFeedback,
+    WaveFeedbackKind,
+)
 from app.rooms.playback import (
     PlaybackState,
     PlaybackStatus,
     expected_position_ms,
     remaining_ms,
 )
-from app.rooms.queue import Queue, QueueItem, QueueState, RepeatMode, make_item
+from app.rooms.queue import QUEUE_LIMIT, Queue, QueueItem, QueueState, RepeatMode, make_item
 from app.rooms.timers import TimerHandle, Timers
+from app.rooms.wave import (
+    OWNER_GRACE_MS,
+    RETRY_DELAYS_MS,
+    SETTINGS_DEBOUNCE_MS,
+    WAVE_PREVIEW,
+    RoomSettings,
+    WaveMeta,
+    WaveMode,
+    WaveState,
+    WaveStatus,
+    WaveView,
+    accept_batch,
+    api_seeds,
+    is_active,
+    needs_refill,
+    prune_meta,
+    remember_recent,
+    takes_from_wave,
+)
+from app.rooms.wave_driver import WaveRequest
 from app.ws.protocol import (
     Ack,
     AddPosition,
@@ -73,6 +105,16 @@ from app.ws.protocol import (
     Snapshot,
     SyncState,
     SyncStats,
+    TrackDislike,
+    TrackLikes,
+    TrackLikesMessage,
+    WaveMessage,
+    WavePin,
+    WaveRemove,
+    WaveStart,
+    WaveStop,
+    WaveStopReason,
+    WaveUpdateSettings,
 )
 
 log = get_logger(__name__)
@@ -100,6 +142,8 @@ ServerPayload = (
     | RoomInfoMessage
     | EventMessage
     | ChatMessageEnvelope
+    | WaveMessage
+    | TrackLikesMessage
     | Ack
     | Closed
 )
@@ -113,11 +157,23 @@ class Outbox(Protocol):
     def close(self, conn_id: str, reason: CloseReason) -> None: ...
 
 
+class WaveDriver(Protocol):
+    """Порт к внешнему миру: запросы идут в фоне, результат возвращается в `apply_wave_*`."""
+
+    def request_batch(self, room: Room, request: WaveRequest) -> None: ...
+
+    def feedback(self, user_id: str, session_id: str, event: WaveFeedback) -> None: ...
+
+    def dislike(self, user_id: str, track_id: str) -> None: ...
+
+
 @dataclass(frozen=True)
 class RoomUser:
     id: str
     name: str
     avatar_url: str | None = None
+    can_wave: bool = True
+    """Есть Плюс: без него владелец волны не услышал бы собственные треки."""
 
 
 @dataclass
@@ -163,6 +219,10 @@ class Room:
         playback: PlaybackState | None = None,
         queue: QueueState | None = None,
         on_change: Callable[[Room], None] | None = None,
+        wave: WaveState | None = None,
+        settings: RoomSettings | None = None,
+        wave_driver: WaveDriver | None = None,
+        owner_grace_ms: int = OWNER_GRACE_MS,
     ) -> None:
         self.id = room_id
         self.slug = slug
@@ -188,11 +248,31 @@ class Room:
         self._limiter = RateLimiter(COMMAND_RATE_PER_S, COMMAND_BURST, clock.monotonic)
         self.closed = False
 
+        self.settings = settings or RoomSettings()
+        self.wave = wave or WaveState()
+        self._wave_driver = wave_driver
+        self._owner_grace_ms = owner_grace_ms
+        self._wave_inflight: int | None = None
+        self._wave_failures = 0
+        self._wave_retry_timer: TimerHandle | None = None
+        self._wave_settings_timer: TimerHandle | None = None
+        self._owner_away_timer: TimerHandle | None = None
+        self._natural_end = False
+        self._wave_published = self._wave_view().model_dump(exclude={"version"})
+        self.track_likes = TrackLikes()
+        self._announced_likes: set[str] = set()
+
     # ── Снимки и рассылка ───────────────────────────────────────────────────────
 
     @property
     def info(self) -> RoomInfo:
-        return RoomInfo(id=self.id, slug=self.slug, name=self.name, owner_id=self.owner_id)
+        return RoomInfo(
+            id=self.id,
+            slug=self.slug,
+            name=self.name,
+            owner_id=self.owner_id,
+            settings=self.settings,
+        )
 
     def snapshot_for(self, conn_id: str) -> Snapshot:
         client = self.clients[conn_id]
@@ -207,6 +287,8 @@ class Room:
             stats=stats,
             events=list(self.events),
             chat=self._fresh_chat(),
+            wave=self._wave_view(),
+            track_likes=self.track_likes,
         )
 
     def _broadcast(self, message: ServerPayload) -> None:
@@ -218,6 +300,7 @@ class Room:
 
     def _publish_queue(self) -> None:
         self._broadcast(QueueMessage(queue=self.queue.snapshot()))
+        self._publish_wave()
 
     def _publish_members(self) -> None:
         members, stats = self._members_view()
@@ -295,6 +378,7 @@ class Room:
                 self._event(EventKind.JOINED, user)
             self._recently_online.add(user.id)
             self._publish_members()
+            self._wave_on_join()
 
     async def leave(self, conn_id: str) -> None:
         async with self.lock:
@@ -314,6 +398,8 @@ class Room:
                 # Комната без слушателей замирает на паузе, состояние сохраняется (SPEC §4.2).
                 self._pause(by=None)
             self._publish_members()
+            if self.wave.owner_id == user.id and not self._user_online(user.id):
+                self._wave_owner_left()
 
     async def _leave_grace_expired(self, user: RoomUser) -> None:
         async with self.lock:
@@ -369,10 +455,19 @@ class Room:
             self._out.close(client.conn_id, CloseReason.KICKED)
         if kicked:
             self._event(EventKind.KICKED, by, title=kicked[0].user.name)
+        if self.wave.owner_id == user_id and is_active(self.wave):
+            self._wave_stop(by, WaveStopReason.OWNER_GONE)
 
     def close_all(self, reason: CloseReason) -> None:
         self.closed = True
-        for timer in (self._end_timer, self._stats_timer, *self._leave_timers.values()):
+        for timer in (
+            self._end_timer,
+            self._stats_timer,
+            self._wave_retry_timer,
+            self._wave_settings_timer,
+            self._owner_away_timer,
+            *self._leave_timers.values(),
+        ):
             if timer is not None:
                 timer.cancel()
         if self._barrier is not None:
@@ -394,6 +489,7 @@ class Room:
     # ── Воспроизведение: внутренние переходы ────────────────────────────────────
 
     def _set_playback(self, by: RoomUser | None, **changes: object) -> None:
+        self.wave.played_ms += self._running_played_ms()
         self.playback = self.playback.model_copy(
             update={
                 **changes,
@@ -432,6 +528,7 @@ class Room:
         """Перейти на элемент очереди: `loading` + барьер, либо остановка, если элемента нет."""
         self._cancel_end_timer()
         self._cancel_barrier()
+        previous_item = self.playback.queue_item_id
         if item is None:
             self._set_playback(
                 by,
@@ -443,6 +540,7 @@ class Room:
                 duration_ms=0,
             )
             self._publish_playback()
+            self._wave_on_item_changed(None, previous_item)
             self._changed()
             return
         self._set_playback(
@@ -455,6 +553,7 @@ class Room:
             duration_ms=item.track.duration_ms,
         )
         self._publish_playback()
+        self._wave_on_item_changed(item, previous_item)
         self._start_barrier(BARRIER_TIMEOUT_MS, START_LEAD_MS)
         self._changed()
 
@@ -495,6 +594,7 @@ class Room:
         )
         self._publish_playback()
         self._schedule_end_timer()
+        self._wave_track_started()
 
     def _pause(self, by: RoomUser | None) -> bool:
         status = self.playback.status
@@ -514,6 +614,8 @@ class Room:
         return True
 
     def _advance(self, by: RoomUser | None, *, natural_end: bool) -> None:
+        self._wave_feed_queue(natural_end=natural_end)
+        self._natural_end = natural_end
         item = self.queue.advance(natural_end=natural_end)
         self._publish_queue()
         self._load(item, by)
@@ -574,6 +676,8 @@ class Room:
                 self._load(item, user)
                 self._event(EventKind.PLAY_ITEM, user, title=item.track.title)
             case CmdSetRepeat(mode=mode):
+                if mode is RepeatMode.QUEUE and is_active(self.wave):
+                    raise ValidationError("С волной повтор очереди не работает: выключите волну.")
                 self.queue.set_repeat(mode)
                 self._publish_queue()
                 self._event(EventKind.REPEAT, user, repeat=mode)
@@ -601,6 +705,20 @@ class Room:
                 self._chat(user, text=text.strip())
             case ReactionSend(emoji=emoji):
                 self._chat(user, emoji=emoji, track_id=self.playback.track_id)
+            case WaveStart():
+                self._wave_start(user, cmd)
+            case WaveStop():
+                if is_active(self.wave):
+                    self._wave_stop(user, WaveStopReason.USER)
+            case WaveUpdateSettings(settings=settings):
+                self._wave_update_settings(user, settings)
+            case WavePin(item_id=item_id):
+                self._wave_pin(user, item_id)
+            case WaveRemove(item_id=item_id):
+                self._wave_remove(item_id)
+            case TrackDislike(expected_queue_item_id=expected):
+                self._check_expected(expected)
+                self._dislike_current(user)
 
     def _cmd_play(self, user: RoomUser) -> None:
         state = self.playback
@@ -608,7 +726,10 @@ class Room:
             return
         if state.queue_item_id is None:
             # Ничего не играет — берём следующий из очереди.
-            if not self.queue.upcoming:
+            if not self.queue.upcoming and not self.wave.buffer:
+                if is_active(self.wave):
+                    self._wave_refill()
+                    return
                 raise ValidationError("Очередь пуста — добавьте трек.")
             self._advance(user, natural_end=False)
             self._event(EventKind.PLAY, user)
@@ -745,7 +866,464 @@ class Room:
         self.chat.append(message)
         self._broadcast(ChatMessageEnvelope(message=message))
 
+    # ── Волна ───────────────────────────────────────────────────────────────────
+
+    def _wave_view(self) -> WaveView:
+        wave = self.wave
+        return WaveView(
+            version=wave.version,
+            wave_id=wave.wave_id,
+            status=wave.status,
+            mode=wave.mode,
+            owner_id=wave.owner_id,
+            owner_name=wave.owner_name,
+            owner_away=wave.owner_left_at_ms is not None,
+            seed_label=wave.seed.label if wave.seed is not None else None,
+            settings=wave.settings,
+            next=wave.buffer[:WAVE_PREVIEW],
+            next_track_id=self._next_track_id(),
+        )
+
+    def _next_track_id(self) -> str | None:
+        """Что заиграет следующим. Клиент предзагружает по этому полю и не дублирует выбор."""
+        queue = self.queue
+        if queue.repeat is RepeatMode.TRACK and queue.current is not None:
+            return None
+        if takes_from_wave(
+            self.wave, upcoming_count=len(queue.upcoming), mix=self.settings.wave_mix
+        ):
+            return self.wave.buffer[0].track.id
+        return queue.upcoming[0].track.id if queue.upcoming else None
+
+    def _publish_wave(self) -> None:
+        """Разослать состояние волны, если оно изменилось. `playback.version` здесь не трогаем:
+        новая версия воспроизведения сбросила бы контроллер дрейфа у всех клиентов."""
+        current = self._wave_view().model_dump(exclude={"version"})
+        if current == self._wave_published:
+            return
+        self._wave_published = current
+        self.wave.version += 1
+        self._broadcast(WaveMessage(wave=self._wave_view()))
+
+    def _running_played_ms(self) -> int:
+        """Сколько сыграно с последнего старта: перемотка и пауза позицию искажают, это — нет."""
+        state = self.playback
+        if state.status is not PlaybackStatus.PLAYING or self.wave.tracked_item_id is None:
+            return 0
+        elapsed = self._clock.now_ms() - state.anchor_server_ms
+        return max(0, min(elapsed, state.duration_ms - state.position_ms))
+
+    def _send_feedback(self, meta: WaveMeta, kind: WaveFeedbackKind, **fields: object) -> None:
+        """Пока владельца нет в комнате, фидбек не отправляем: он не слушает (D-040)."""
+        if self._wave_driver is None or not self._user_online(meta.owner_id):
+            return
+        event = WaveFeedback.model_validate(
+            {
+                "kind": kind,
+                "at_ms": self._clock.now_ms(),
+                "batch_id": meta.batch_id,
+                **fields,
+            }
+        )
+        self._wave_driver.feedback(meta.owner_id, meta.session_id, event)
+
+    def _wave_track_started(self) -> None:
+        current = self.queue.current
+        if current is None or self.wave.tracked_item_id == current.id:
+            return
+        meta = self.wave.meta.get(current.id)
+        if meta is None:
+            return
+        self.wave.tracked_item_id = current.id
+        self.wave.played_ms = 0
+        self._send_feedback(meta, WaveFeedbackKind.TRACK_STARTED, track_id=meta.track_id)
+
+    def _wave_on_item_changed(self, item: QueueItem | None, previous_item: str | None) -> None:
+        """Вызывается из `_load` после смены элемента: итог предыдущего, новый буфер, лайки."""
+        natural = self._natural_end
+        self._natural_end = False
+        wave = self.wave
+        tracked = wave.tracked_item_id
+        new_id = item.id if item is not None else None
+        if tracked is not None and (tracked != new_id or natural):
+            meta = wave.meta.pop(tracked, None)
+            if meta is not None:
+                self._send_feedback(
+                    meta,
+                    WaveFeedbackKind.TRACK_FINISHED if natural else WaveFeedbackKind.SKIP,
+                    track_id=meta.track_id,
+                    played_s=round(wave.played_ms / 1000, 1),
+                )
+            wave.tracked_item_id = None
+            wave.played_ms = 0
+        if item is not None:
+            remember_recent(wave, item.track.id)
+        prune_meta(wave, {new_id} if new_id else set())
+        if new_id != previous_item:
+            self._reset_track_likes(new_id)
+        if is_active(wave) and item is None and not wave.buffer:
+            wave.status = WaveStatus.WAITING
+        self._publish_wave()
+        self._wave_refill()
+
+    def _wave_feed_queue(self, *, natural_end: bool) -> None:
+        """Перед переходом: если следующий трек из волны, поставить его первым в очередь."""
+        queue = self.queue
+        wave = self.wave
+        if not is_active(wave) or len(queue.upcoming) >= QUEUE_LIMIT:
+            return
+        if natural_end and queue.repeat is RepeatMode.TRACK and queue.current is not None:
+            return
+        upcoming = len(queue.upcoming)
+        if takes_from_wave(wave, upcoming_count=upcoming, mix=self.settings.wave_mix):
+            queue.add_next([wave.buffer.pop(0)])
+            wave.last_from_wave = True
+        elif upcoming:
+            wave.last_from_wave = False
+
+    def _wave_refill(self) -> None:
+        wave = self.wave
+        if (
+            self._wave_driver is None
+            or self.closed
+            or not self.clients
+            or not needs_refill(wave)
+            or self._wave_inflight == wave.generation
+            or self._wave_retry_timer is not None
+            or self._wave_settings_timer is not None
+            or wave.owner_id is None
+        ):
+            return
+        self._wave_inflight = wave.generation
+        self._wave_driver.request_batch(
+            self,
+            WaveRequest(
+                generation=wave.generation,
+                owner_id=wave.owner_id,
+                session_id=wave.session_id,
+                seeds=api_seeds(wave),
+                recent_ids=list(wave.recent_track_ids),
+            ),
+        )
+
+    def _queued_track_ids(self) -> set[str]:
+        queue = self.queue
+        ids = {i.track.id for i in queue.upcoming}
+        if queue.current is not None:
+            ids.add(queue.current.track.id)
+        ids.update(i.track.id for i in self.wave.buffer)
+        return ids
+
+    async def apply_wave_batch(self, generation: int, batch: WaveBatch) -> None:
+        async with self.lock:
+            wave = self.wave
+            if self.closed or generation != wave.generation:
+                return
+            self._wave_inflight = None
+            accepted = accept_batch(
+                wave,
+                batch.tracks,
+                session_id=batch.session_id,
+                batch_id=batch.batch_id,
+                queued_track_ids=self._queued_track_ids(),
+                now_ms=self._clock.now_ms(),
+            )
+            if accepted == 0:
+                # Пустая порция или одни повторы: иначе дозапрос зациклится.
+                wave.session_id = batch.session_id
+                self._wave_failed()
+                return
+            first_session = wave.status is WaveStatus.STARTING
+            was_unavailable = wave.status is WaveStatus.UNAVAILABLE
+            wave.session_id = batch.session_id
+            wave.status = WaveStatus.PLAYING
+            self._wave_failures = 0
+            if first_session and wave.owner_id is not None:
+                meta = WaveMeta(
+                    session_id=batch.session_id,
+                    batch_id=batch.batch_id,
+                    owner_id=wave.owner_id,
+                    track_id="",
+                )
+                self._send_feedback(meta, WaveFeedbackKind.RADIO_STARTED)
+            if was_unavailable:
+                self._event(EventKind.WAVE_RESUMED, None)
+            self._wave_start_if_idle()
+            self._publish_wave()
+            self._changed()
+            self._wave_refill()
+
+    async def apply_wave_failure(self, generation: int, *, fatal: bool) -> None:
+        async with self.lock:
+            if self.closed or generation != self.wave.generation:
+                return
+            self._wave_inflight = None
+            if fatal:
+                self._wave_stop(None, WaveStopReason.AUTH)
+            else:
+                self._wave_failed()
+
+    def _wave_failed(self) -> None:
+        wave = self.wave
+        delay = RETRY_DELAYS_MS[min(self._wave_failures, len(RETRY_DELAYS_MS) - 1)]
+        self._wave_failures += 1
+        if not wave.buffer and wave.status is not WaveStatus.UNAVAILABLE:
+            wave.status = WaveStatus.UNAVAILABLE
+            self._event(EventKind.WAVE_UNAVAILABLE, None)
+            self._publish_wave()
+            self._changed()
+
+        async def retry() -> None:
+            async with self.lock:
+                self._wave_retry_timer = None
+                self._wave_refill()
+
+        self._wave_retry_timer = self._timers.call_later(delay, retry)
+
+    def _wave_start_if_idle(self) -> None:
+        if self.queue.current is None and self.clients and self.wave.buffer:
+            self._advance(None, natural_end=False)
+
+    def _cancel_wave_timers(self) -> None:
+        for name in ("_wave_retry_timer", "_wave_settings_timer", "_owner_away_timer"):
+            timer: TimerHandle | None = getattr(self, name)
+            if timer is not None:
+                timer.cancel()
+                setattr(self, name, None)
+
+    def _wave_start(self, user: RoomUser, cmd: WaveStart) -> None:
+        if not user.can_wave:
+            raise SubscriptionRequiredError("Для своей волны нужна подписка Плюс.")
+        wave = self.wave
+        replaced = is_active(wave)
+        if replaced and cmd.expected_wave_id != wave.wave_id:
+            raise ConflictError("Волну уже заменили — посмотрите, какая играет сейчас.")
+        if cmd.mode is WaveMode.SEED and cmd.seed is None:
+            raise ValidationError("Не выбрано, от чего запускать волну.")
+        self._cancel_wave_timers()
+        self._wave_failures = 0
+        wave.generation += 1
+        wave.wave_id = secrets.token_urlsafe(8)
+        wave.status = WaveStatus.STARTING
+        wave.mode = cmd.mode
+        wave.owner_id = user.id
+        wave.owner_name = user.name
+        wave.owner_left_at_ms = None
+        wave.seed = cmd.seed if cmd.mode is WaveMode.SEED else None
+        wave.settings = list(cmd.settings)
+        wave.session_id = None
+        wave.buffer = []
+        wave.last_from_wave = False
+        current = self.queue.current
+        prune_meta(wave, {current.id} if current is not None else set())
+        if self.queue.repeat is RepeatMode.QUEUE:
+            # Сыгранные треки возвращались бы в очередь: она не опустеет, и волна не заиграет.
+            self.queue.set_repeat(RepeatMode.OFF)
+            self._publish_queue()
+            self._event(EventKind.REPEAT, user, repeat=RepeatMode.OFF)
+        self._event(
+            EventKind.WAVE_REPLACED if replaced else EventKind.WAVE_STARTED,
+            user,
+            title=wave.seed.label if wave.seed is not None else None,
+        )
+        self._publish_wave()
+        self._changed()
+        self._wave_refill()
+
+    def _wave_stop(self, by: RoomUser | None, reason: WaveStopReason) -> None:
+        """Текущий трек доигрывает и получает свой итог: метаданные текущего элемента остаются."""
+        wave = self.wave
+        self._cancel_wave_timers()
+        self._wave_failures = 0
+        wave.generation += 1
+        wave.wave_id = None
+        wave.status = WaveStatus.OFF
+        wave.mode = None
+        wave.owner_id = None
+        wave.owner_name = None
+        wave.owner_left_at_ms = None
+        wave.seed = None
+        wave.settings = []
+        wave.session_id = None
+        wave.buffer = []
+        current = self.queue.current
+        prune_meta(wave, {current.id} if current is not None else set())
+        self._event(EventKind.WAVE_STOPPED, by, reason=reason)
+        self._publish_wave()
+        self._changed()
+
+    async def stop_wave_of(self, user_id: str) -> None:
+        """Владелец вышел из аккаунта: его токеном больше ничего не запрашиваем."""
+        async with self.lock:
+            if self.wave.owner_id == user_id and is_active(self.wave):
+                self._wave_stop(None, WaveStopReason.OWNER_GONE)
+
+    def _wave_update_settings(self, user: RoomUser, settings: list[str]) -> None:
+        wave = self.wave
+        if not is_active(wave):
+            raise ValidationError("Волна не играет.")
+        if wave.owner_id != user.id:
+            raise ForbiddenError("Настройки волны меняет её владелец.")
+        if settings == wave.settings:
+            return
+        wave.generation += 1
+        wave.settings = list(settings)
+        wave.session_id = None
+        wave.buffer = []
+        current = self.queue.current
+        prune_meta(wave, {current.id} if current is not None else set())
+        wave.status = WaveStatus.STARTING
+        if self._wave_retry_timer is not None:
+            self._wave_retry_timer.cancel()
+            self._wave_retry_timer = None
+        if self._wave_settings_timer is not None:
+            self._wave_settings_timer.cancel()
+
+        async def apply() -> None:
+            async with self.lock:
+                self._wave_settings_timer = None
+                self._wave_refill()
+
+        # Схлопываем серию изменений: каждое создавало бы новую сессию.
+        self._wave_settings_timer = self._timers.call_later(SETTINGS_DEBOUNCE_MS, apply)
+        self._publish_wave()
+        self._changed()
+
+    def _wave_take(self, item_id: str) -> QueueItem:
+        for index, item in enumerate(self.wave.buffer):
+            if item.id == item_id:
+                return self.wave.buffer.pop(index)
+        raise NotFoundError("Этого трека уже нет в волне.")
+
+    def _wave_pin(self, user: RoomUser, item_id: str) -> None:
+        """Закреплённый трек — обычный ручной элемент: без фидбека и с другим автором."""
+        item = self._wave_take(item_id)
+        self.wave.meta.pop(item_id, None)
+        pinned = make_item(item.track, user.id, self._clock.now_ms())
+        self.queue.add([pinned])
+        self._publish_queue()
+        self._event(EventKind.QUEUE_ADD, user, count=1, title=pinned.track.title)
+        self._changed()
+        self._wave_refill()
+
+    def _wave_remove(self, item_id: str) -> None:
+        item = self._wave_take(item_id)
+        meta = self.wave.meta.pop(item_id, None)
+        if meta is not None:
+            self._send_feedback(meta, WaveFeedbackKind.SKIP, track_id=item.track.id, played_s=0)
+        self._publish_wave()
+        self._changed()
+        self._wave_refill()
+
+    def _dislike_current(self, user: RoomUser) -> None:
+        current = self.queue.current
+        meta = self.wave.meta.get(current.id) if current is not None else None
+        if current is None or meta is None:
+            raise ValidationError("«Не нравится» работает только для треков волны.")
+        if meta.owner_id == user.id and self._wave_driver is not None:
+            self._send_feedback(
+                meta,
+                WaveFeedbackKind.DISLIKE,
+                track_id=meta.track_id,
+                played_s=round((self.wave.played_ms + self._running_played_ms()) / 1000, 1),
+            )
+            self._wave_driver.dislike(user.id, meta.track_id)
+        self._advance(user, natural_end=False)
+        self._event(EventKind.NEXT, user, title=current.track.title)
+
+    def _wave_owner_left(self) -> None:
+        wave = self.wave
+        if not is_active(wave):
+            return
+        wave.owner_left_at_ms = self._clock.now_ms()
+        self._arm_owner_timer(self._owner_grace_ms)
+        self._publish_wave()
+        self._changed()
+
+    def _arm_owner_timer(self, delay_ms: int) -> None:
+        if self._owner_away_timer is not None:
+            self._owner_away_timer.cancel()
+
+        async def expired() -> None:
+            async with self.lock:
+                self._owner_away_timer = None
+                owner = self.wave.owner_id
+                if owner is not None and not self._user_online(owner) and is_active(self.wave):
+                    self._wave_stop(None, WaveStopReason.OWNER_AWAY)
+
+        self._owner_away_timer = self._timers.call_later(delay_ms, expired)
+
+    def _wave_on_join(self) -> None:
+        """Вход: владелец вернулся — окно отменяется; после рестарта таймер поднимается заново."""
+        wave = self.wave
+        if not is_active(wave) or wave.owner_id is None:
+            return
+        if self._user_online(wave.owner_id):
+            if wave.owner_left_at_ms is not None:
+                wave.owner_left_at_ms = None
+                if self._owner_away_timer is not None:
+                    self._owner_away_timer.cancel()
+                    self._owner_away_timer = None
+                self._publish_wave()
+                self._changed()
+        else:
+            now = self._clock.now_ms()
+            if wave.owner_left_at_ms is None:
+                wave.owner_left_at_ms = now
+                self._changed()
+            remaining = wave.owner_left_at_ms + self._owner_grace_ms - now
+            if remaining <= 0:
+                self._wave_stop(None, WaveStopReason.OWNER_AWAY)
+                return
+            if self._owner_away_timer is None:
+                self._arm_owner_timer(remaining)
+            self._publish_wave()
+        self._wave_start_if_idle()
+        self._wave_refill()
+
+    # ── Лайки в комнате ─────────────────────────────────────────────────────────
+
+    def _reset_track_likes(self, item_id: str | None) -> None:
+        had = bool(self.track_likes.user_ids)
+        self.track_likes = TrackLikes(queue_item_id=item_id)
+        self._announced_likes = set()
+        if had:
+            self._broadcast(TrackLikesMessage(likes=self.track_likes))
+
+    async def note_like(self, user: RoomUser, track_id: str, *, liked: bool) -> None:
+        """Лайк из REST: счётчик и лента — только для текущего элемента этой комнаты."""
+        async with self.lock:
+            current = self.queue.current
+            if current is None or current.track.id != track_id:
+                return
+            ids = [u for u in self.track_likes.user_ids if u != user.id]
+            if liked:
+                ids.append(user.id)
+            self.track_likes = TrackLikes(queue_item_id=current.id, user_ids=ids)
+            self._broadcast(TrackLikesMessage(likes=self.track_likes))
+            if liked and self.settings.announce_likes and user.id not in self._announced_likes:
+                self._announced_likes.add(user.id)
+                self._event(EventKind.TRACK_LIKED, user, title=current.track.title)
+            meta = self.wave.meta.get(current.id)
+            if meta is not None and meta.owner_id == user.id:
+                self._send_feedback(
+                    meta,
+                    WaveFeedbackKind.LIKE if liked else WaveFeedbackKind.UNLIKE,
+                    track_id=track_id,
+                )
+
+    def update_settings(self, settings: RoomSettings) -> None:
+        self.settings = settings
+        self._broadcast(RoomInfoMessage(room=self.info))
+        self._publish_wave()
+        self._changed()
+
     # ── Сохранение ──────────────────────────────────────────────────────────────
+
+    def persisted_wave(self) -> WaveState:
+        return self.wave.model_copy(
+            update={"played_ms": self.wave.played_ms + self._running_played_ms()}
+        )
 
     def persisted_playback(self) -> PlaybackState:
         """Состояние для БД: если играет — фиксируем текущую позицию и ставим на паузу.

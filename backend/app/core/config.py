@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     music_provider: MusicProviderKind = MusicProviderKind.FAKE
     audio_mode: AudioMode = AudioMode.DIRECT
     ym_proxy_url: str | None = None
+    # Сколько волна играет после ухода её владельца (SPEC-wave §7).
+    wave_owner_grace_s: int = 900
 
     sentry_dsn: str | None = None
     sentry_frontend_dsn: str | None = None

@@ -7,10 +7,10 @@ from fastapi import APIRouter
 from app.api.deps import Ctx, CurrentUser, Db
 from app.api.schemas import (
     CreateRoomRequest,
-    RenameRoomRequest,
     RoomDetails,
     RoomSummary,
     SlugResponse,
+    UpdateRoomRequest,
 )
 from app.rooms import service
 from app.rooms.room import RoomUser
@@ -62,17 +62,22 @@ async def room_details(slug: str, user: CurrentUser, db: Db) -> RoomDetails:
 
 
 @router.patch("/{slug}")
-async def rename_room(
-    slug: str, body: RenameRoomRequest, user: CurrentUser, db: Db, ctx: Ctx
+async def update_room(
+    slug: str, body: UpdateRoomRequest, user: CurrentUser, db: Db, ctx: Ctx
 ) -> RoomDetails:
     room = await service.get_room_by_slug(db, slug)
     service.ensure_owner(room, user)
-    name = body.name.strip()
-    await service.rename_room(db, room, name)
-    live = ctx.rooms.loaded(room.id)
-    if live is not None:
-        async with live.lock:
+    name = body.name.strip() if body.name else None
+    if name:
+        await service.rename_room(db, room, name)
+    # Настройки живут в живой комнате и сохраняются вместе с её состоянием.
+    live = await ctx.rooms.get(room)
+    async with live.lock:
+        if name:
             live.rename(name, RoomUser(id=user.id, name=user.display_name))
+        changes = body.model_dump(exclude={"name"}, exclude_none=True, by_alias=False)
+        if changes:
+            live.update_settings(live.settings.model_copy(update=changes))
     return RoomDetails(
         id=room.id, slug=room.slug, name=room.name, owner_id=room.owner_id, is_owner=True
     )
