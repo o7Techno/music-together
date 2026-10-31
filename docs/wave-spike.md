@@ -1,6 +1,6 @@
 # Спайк: «Моя волна», лайки и плейлисты (SPEC-wave §2)
 
-Дата: 2026-10-31. `yandex-music` 3.2.2, один аккаунт владельца с Плюсом, IP домашней сети.
+Дата: 2026-10-31. `yandex-music` 3.2.2, один аккаунт владельца с Плюсом, запросы с компьютера разработки.
 Скрипт: [`scripts/spike_wave.py`](../scripts/spike_wave.py) (`read`, `collection`, `skip-limit`, `session-age`).
 Сырые отчёты — в `scripts/.spike-out/` (в .gitignore).
 
@@ -26,7 +26,7 @@
 ### События
 Все приняты: `radioStarted`, `trackStarted`, `skip`, `trackFinished`, `like`, `unlike`, `dislike`, `undislike`,
 пачка `rotor_session_feedbacks`, фидбек внутри `rotor_session_tracks(feedbacks=…)`. `batch_id` не обязателен
-(`trackStarted` без него принят), но передаём. Прежде всего используем отправку вместе с запросом порции и пачкой.
+(`trackStarted` без него принят), но передаём. Отправляем пачкой или вместе с запросом порции.
 
 ### Лимит пропусков
 `rotor_account_status` отдаёт `skips_per_hour: 6`. **Отправка 10 `skip` за несколько секунд в инкогнито-сессии
