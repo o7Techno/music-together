@@ -32,3 +32,6 @@ Thumbs.db
 
 !backend/fake_media/.gitkeep
 backups/
+
+# Локальная SQLite для разработки
+backend/*.db

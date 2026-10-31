@@ -36,7 +36,7 @@
 
 ## Прод
 `docker-compose.yml` (db, backend, web=Caddy), `backend/Dockerfile`, `frontend/Dockerfile`, `Caddyfile`.
-`.env` для сервера — `scripts/init-env.sh <домен> <почта>`. Бэкапы — `scripts/backup.sh`,
+`.env` для сервера — `scripts/init-env.sh <домен>`. Бэкапы — `scripts/backup.sh`,
 эксплуатация — `docs/operations.md`. CI job `docker` поднимает весь стек и проверяет его по HTTPS.
 
 ## Структура

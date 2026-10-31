@@ -121,8 +121,9 @@ export function Player() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center">
         <IconButton
+          className="justify-self-start"
           label={REPEAT_LABEL[repeat]}
           active={repeat !== 'off'}
           onClick={() => {
@@ -152,8 +153,8 @@ export function Player() {
             <NextIcon />
           </IconButton>
         </div>
-        <VolumeControl />
       </div>
+      <VolumeControl />
     </section>
   )
 }
@@ -194,7 +195,7 @@ function VolumeControl() {
     }
   }, [session, state])
   return (
-    <div className="group flex items-center gap-1">
+    <div className="flex items-center gap-2">
       <IconButton
         label={state.muted ? 'Включить звук' : 'Выключить звук'}
         onClick={() => {
@@ -213,7 +214,7 @@ function VolumeControl() {
         onChange={(e) => {
           setState({ volume: Number(e.target.value), muted: false })
         }}
-        className="hidden w-20 accent-[var(--c-accent)] sm:block"
+        className="min-w-0 flex-1 accent-[var(--c-accent)]"
       />
     </div>
   )

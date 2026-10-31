@@ -90,3 +90,18 @@ test('theme toggle switches to light and is remembered', async ({ browser }) => 
   await page.reload()
   await expect(page.locator('html')).toHaveClass(/light/)
 })
+
+test('player controls stay inside the player column', async ({ browser }) => {
+  const page = await newUser(browser, 'Аня')
+  const slug = await createRoom(page)
+  await enterRoom(page, slug)
+  for (const width of [1024, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 800 })
+    const player = await page.getByRole('region', { name: 'Плеер', exact: true }).boundingBox()
+    const volume = await page.getByRole('slider', { name: 'Громкость' }).boundingBox()
+    if (!player || !volume) throw new Error('no boxes')
+    expect(volume.x + volume.width, `ширина окна ${String(width)}`).toBeLessThanOrEqual(
+      player.x + player.width,
+    )
+  }
+})
