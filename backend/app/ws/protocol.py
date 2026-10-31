@@ -181,6 +181,12 @@ class WaveUpdateSettings(ApiModel):
     settings: list[WaveSetting] = Field(max_length=WAVE_SETTINGS_LIMIT)
 
 
+class WaveSetParticipation(ApiModel):
+    type: Literal["wave.set_participation"] = "wave.set_participation"
+    client_msg_id: str
+    enabled: bool
+
+
 class WavePin(ApiModel):
     type: Literal["wave.pin"] = "wave.pin"
     client_msg_id: str
@@ -218,6 +224,7 @@ RoomCommand = (
     | WaveStart
     | WaveStop
     | WaveUpdateSettings
+    | WaveSetParticipation
     | WavePin
     | WaveRemove
     | TrackDislike
@@ -246,6 +253,7 @@ ClientMessage = Annotated[
     | WaveStart
     | WaveStop
     | WaveUpdateSettings
+    | WaveSetParticipation
     | WavePin
     | WaveRemove
     | TrackDislike,
@@ -308,6 +316,8 @@ class EventKind(StrEnum):
     WAVE_STOPPED = "wave_stopped"
     WAVE_UNAVAILABLE = "wave_unavailable"
     WAVE_RESUMED = "wave_resumed"
+    WAVE_SHARED_STARTED = "wave_shared_started"
+    WAVE_NO_SOURCES = "wave_no_sources"
     TRACK_LIKED = "track_liked"
 
 

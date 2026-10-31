@@ -31,8 +31,10 @@ export function useWaveStart() {
       const { wave, selfUserId } = useRoomStore.getState()
       const active = wave !== null && wave.status !== 'off'
       if (active && wave.ownerId !== selfUserId) {
-        const name = wave.ownerName ?? 'другого участника'
-        if (!window.confirm(`Заменить волну ${name} на свою?`)) return false
+        const question = wave.ownerName
+          ? `Заменить волну ${wave.ownerName} на свою?`
+          : 'Заменить общую волну?'
+        if (!window.confirm(question)) return false
       }
       once(
         EXPLAINED_KEY,

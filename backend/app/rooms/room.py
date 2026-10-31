@@ -56,15 +56,18 @@ from app.rooms.wave import (
     RoomSettings,
     WaveMeta,
     WaveMode,
+    WaveSourceView,
     WaveState,
     WaveStatus,
     WaveView,
     accept_batch,
     api_seeds,
+    drop_sources_except,
     is_active,
     needs_refill,
     prune_meta,
     remember_recent,
+    round_robin,
     takes_from_wave,
 )
 from app.rooms.wave_driver import WaveRequest
@@ -111,6 +114,7 @@ from app.ws.protocol import (
     WaveMessage,
     WavePin,
     WaveRemove,
+    WaveSetParticipation,
     WaveStart,
     WaveStop,
     WaveStopReason,
@@ -252,9 +256,13 @@ class Room:
         self.wave = wave or WaveState()
         self._wave_driver = wave_driver
         self._owner_grace_ms = owner_grace_ms
-        self._wave_inflight: int | None = None
-        self._wave_failures = 0
-        self._wave_retry_timer: TimerHandle | None = None
+        self._wave_inflight: set[str] = set()
+        self._wave_failures: dict[str, int] = {}
+        self._wave_retry_timers: dict[str, TimerHandle] = {}
+        self._source_grace: dict[str, RoomUser] = {}
+        """Источники общей волны, закрывшие соединение: выпадут после LEAVE_GRACE_MS."""
+        self._no_sources_announced = False
+        self._banned_sources: set[str] = set()
         self._wave_settings_timer: TimerHandle | None = None
         self._owner_away_timer: TimerHandle | None = None
         self._natural_end = False
@@ -398,8 +406,12 @@ class Room:
                 # Комната без слушателей замирает на паузе, состояние сохраняется (SPEC §4.2).
                 self._pause(by=None)
             self._publish_members()
-            if self.wave.owner_id == user.id and not self._user_online(user.id):
-                self._wave_owner_left()
+            if not self._user_online(user.id):
+                if self.wave.owner_id == user.id:
+                    self._wave_owner_left()
+                elif self._is_shared and user.can_wave and user.id not in self.wave.opted_out:
+                    self._source_grace[user.id] = user
+                    self._wave_sources_changed()
 
     async def _leave_grace_expired(self, user: RoomUser) -> None:
         async with self.lock:
@@ -408,6 +420,8 @@ class Room:
                 return
             self._recently_online.discard(user.id)
             self._event(EventKind.LEFT, user)
+            if self._source_grace.pop(user.id, None) is not None:
+                self._wave_sources_changed()
 
     async def update_client_status(self, conn_id: str, status: ClientStatus) -> None:
         async with self.lock:
@@ -431,6 +445,7 @@ class Room:
                     self._finish_barrier()
             if changed:
                 self._publish_members()
+                self._wave_sources_changed()
 
     async def report_drift(self, conn_id: str, report: DriftReport) -> None:
         async with self.lock:
@@ -457,13 +472,17 @@ class Room:
             self._event(EventKind.KICKED, by, title=kicked[0].user.name)
         if self.wave.owner_id == user_id and is_active(self.wave):
             self._wave_stop(by, WaveStopReason.OWNER_GONE)
+        self._source_grace.pop(user_id, None)
+        if kicked:
+            self._banned_sources.add(user_id)
+            self._wave_sources_changed()
 
     def close_all(self, reason: CloseReason) -> None:
         self.closed = True
         for timer in (
             self._end_timer,
             self._stats_timer,
-            self._wave_retry_timer,
+            *self._wave_retry_timers.values(),
             self._wave_settings_timer,
             self._owner_away_timer,
             *self._leave_timers.values(),
@@ -712,6 +731,8 @@ class Room:
                     self._wave_stop(user, WaveStopReason.USER)
             case WaveUpdateSettings(settings=settings):
                 self._wave_update_settings(user, settings)
+            case WaveSetParticipation(enabled=enabled):
+                self._wave_set_participation(user, enabled=enabled)
             case WavePin(item_id=item_id):
                 self._wave_pin(user, item_id)
             case WaveRemove(item_id=item_id):
@@ -880,6 +901,7 @@ class Room:
             owner_away=wave.owner_left_at_ms is not None,
             seed_label=wave.seed.label if wave.seed is not None else None,
             settings=wave.settings,
+            sources=self._source_views(),
             next=wave.buffer[:WAVE_PREVIEW],
             next_track_id=self._next_track_id(),
         )
@@ -976,10 +998,80 @@ class Room:
             return
         upcoming = len(queue.upcoming)
         if takes_from_wave(wave, upcoming_count=upcoming, mix=self.settings.wave_mix):
-            queue.add_next([wave.buffer.pop(0)])
+            item = wave.buffer.pop(0)
+            queue.add_next([item])
             wave.last_from_wave = True
+            wave.last_source_id = item.added_by
         elif upcoming:
             wave.last_from_wave = False
+
+    def _wave_sources(self) -> dict[str, str | None]:
+        """Кто сейчас даёт треки: пользователь → имя."""
+        wave = self.wave
+        if not self._is_shared:
+            return {wave.owner_id: wave.owner_name} if wave.owner_id else {}
+        sources: dict[str, str | None] = {}
+        for client in self.clients.values():
+            user = client.user
+            if user.id in wave.opted_out or user.id in self._banned_sources or not user.can_wave:
+                continue
+            if client.audio_unlocked:
+                sources[user.id] = user.name
+        for user in self._source_grace.values():
+            if user.id not in wave.opted_out:
+                sources.setdefault(user.id, user.name)
+        return dict(sorted(sources.items()))
+
+    @property
+    def _is_shared(self) -> bool:
+        return is_active(self.wave) and self.wave.mode is WaveMode.SHARED
+
+    def _source_views(self) -> list[WaveSourceView]:
+        if not self._is_shared:
+            return []
+        active = self._wave_sources()
+        users = {c.user.id: c.user for c in self.clients.values()}
+        users.update(self._source_grace)
+        return [
+            WaveSourceView(
+                user_id=user.id,
+                name=user.name,
+                enabled=user.id not in self.wave.opted_out,
+                active=user.id in active,
+            )
+            for user in sorted(users.values(), key=lambda u: u.id)
+        ]
+
+    def _wave_sources_changed(self) -> None:
+        """Состав общей волны изменился: убрать выпавших, выстроить круг, дозапросить."""
+        if not self._is_shared:
+            return
+        # Сразу после рестарта или входа звук ещё не разблокирован: состав пока неизвестен.
+        if not any(c.audio_unlocked for c in self.clients.values()):
+            return
+        wave = self.wave
+        for client in self.clients.values():
+            if client.audio_unlocked:
+                self._source_grace.pop(client.user.id, None)
+        sources = self._wave_sources()
+        before = len(wave.buffer)
+        drop_sources_except(wave, set(sources))
+        round_robin(wave, list(sources))
+        if not sources:
+            if wave.status is not WaveStatus.WAITING:
+                wave.status = WaveStatus.WAITING
+            # Ждём, а не останавливаемся: кто-нибудь вернётся (D-040).
+            if self.clients and not self._no_sources_announced:
+                self._no_sources_announced = True
+                self._event(EventKind.WAVE_NO_SOURCES, None)
+        else:
+            self._no_sources_announced = False
+            if wave.status is WaveStatus.WAITING and wave.buffer:
+                wave.status = WaveStatus.PLAYING
+        if len(wave.buffer) != before:
+            self._changed()
+        self._publish_wave()
+        self._wave_refill()
 
     def _wave_refill(self) -> None:
         wave = self.wave
@@ -987,24 +1079,30 @@ class Room:
             self._wave_driver is None
             or self.closed
             or not self.clients
-            or not needs_refill(wave)
-            or self._wave_inflight == wave.generation
-            or self._wave_retry_timer is not None
+            or not is_active(wave)
             or self._wave_settings_timer is not None
-            or wave.owner_id is None
         ):
             return
-        self._wave_inflight = wave.generation
-        self._wave_driver.request_batch(
-            self,
-            WaveRequest(
-                generation=wave.generation,
-                owner_id=wave.owner_id,
-                session_id=wave.session_id,
-                seeds=api_seeds(wave),
-                recent_ids=list(wave.recent_track_ids),
-            ),
-        )
+        sources = self._wave_sources()
+        for source_id in sources:
+            if (
+                source_id in self._wave_inflight
+                or source_id in self._wave_retry_timers
+                or not needs_refill(wave, source_id, len(sources))
+            ):
+                continue
+            self._wave_inflight.add(source_id)
+            self._wave_driver.request_batch(
+                self,
+                WaveRequest(
+                    generation=wave.generation,
+                    owner_id=source_id,
+                    owner_name=sources[source_id],
+                    session_id=wave.sessions.get(source_id),
+                    seeds=api_seeds(wave),
+                    recent_ids=list(wave.recent_track_ids),
+                ),
+            )
 
     def _queued_track_ids(self) -> set[str]:
         queue = self.queue
@@ -1014,35 +1112,52 @@ class Room:
         ids.update(i.track.id for i in self.wave.buffer)
         return ids
 
-    async def apply_wave_batch(self, generation: int, batch: WaveBatch) -> None:
+    async def apply_wave_batch(
+        self,
+        generation: int,
+        batch: WaveBatch,
+        *,
+        owner_id: str | None = None,
+        owner_name: str | None = None,
+    ) -> None:
         async with self.lock:
             wave = self.wave
             if self.closed or generation != wave.generation:
                 return
-            self._wave_inflight = None
+            source_id = owner_id or wave.owner_id
+            if source_id is None:
+                return
+            self._wave_inflight.discard(source_id)
+            sources = self._wave_sources()
+            if source_id not in sources:
+                # Источник выпал, пока шёл запрос: его треки не нужны.
+                wave.sessions[source_id] = batch.session_id
+                return
             accepted = accept_batch(
                 wave,
                 batch.tracks,
+                owner_id=source_id,
+                owner_name=owner_name or sources[source_id],
                 session_id=batch.session_id,
                 batch_id=batch.batch_id,
                 queued_track_ids=self._queued_track_ids(),
                 now_ms=self._clock.now_ms(),
             )
+            first_session = source_id not in wave.sessions
+            wave.sessions[source_id] = batch.session_id
             if accepted == 0:
                 # Пустая порция или одни повторы: иначе дозапрос зациклится.
-                wave.session_id = batch.session_id
-                self._wave_failed()
+                self._wave_failed(source_id)
                 return
-            first_session = wave.status is WaveStatus.STARTING
+            round_robin(wave, list(sources))
             was_unavailable = wave.status is WaveStatus.UNAVAILABLE
-            wave.session_id = batch.session_id
             wave.status = WaveStatus.PLAYING
-            self._wave_failures = 0
-            if first_session and wave.owner_id is not None:
+            self._wave_failures.pop(source_id, None)
+            if first_session:
                 meta = WaveMeta(
                     session_id=batch.session_id,
                     batch_id=batch.batch_id,
-                    owner_id=wave.owner_id,
+                    owner_id=source_id,
                     track_id="",
                 )
                 self._send_feedback(meta, WaveFeedbackKind.RADIO_STARTED)
@@ -1053,20 +1168,29 @@ class Room:
             self._changed()
             self._wave_refill()
 
-    async def apply_wave_failure(self, generation: int, *, fatal: bool) -> None:
+    async def apply_wave_failure(
+        self, generation: int, *, fatal: bool, owner_id: str | None = None
+    ) -> None:
         async with self.lock:
             if self.closed or generation != self.wave.generation:
                 return
-            self._wave_inflight = None
-            if fatal:
-                self._wave_stop(None, WaveStopReason.AUTH)
+            source_id = owner_id or self.wave.owner_id
+            if source_id is None:
+                return
+            self._wave_inflight.discard(source_id)
+            if not fatal:
+                self._wave_failed(source_id)
+            elif self._is_shared:
+                # Токен одного участника не должен останавливать волну остальных.
+                self._drop_source(source_id)
             else:
-                self._wave_failed()
+                self._wave_stop(None, WaveStopReason.AUTH)
 
-    def _wave_failed(self) -> None:
+    def _wave_failed(self, source_id: str) -> None:
         wave = self.wave
-        delay = RETRY_DELAYS_MS[min(self._wave_failures, len(RETRY_DELAYS_MS) - 1)]
-        self._wave_failures += 1
+        attempt = self._wave_failures.get(source_id, 0)
+        self._wave_failures[source_id] = attempt + 1
+        delay = RETRY_DELAYS_MS[min(attempt, len(RETRY_DELAYS_MS) - 1)]
         if not wave.buffer and wave.status is not WaveStatus.UNAVAILABLE:
             wave.status = WaveStatus.UNAVAILABLE
             self._event(EventKind.WAVE_UNAVAILABLE, None)
@@ -1075,24 +1199,30 @@ class Room:
 
         async def retry() -> None:
             async with self.lock:
-                self._wave_retry_timer = None
+                self._wave_retry_timers.pop(source_id, None)
                 self._wave_refill()
 
-        self._wave_retry_timer = self._timers.call_later(delay, retry)
+        self._wave_retry_timers[source_id] = self._timers.call_later(delay, retry)
 
     def _wave_start_if_idle(self) -> None:
         if self.queue.current is None and self.clients and self.wave.buffer:
             self._advance(None, natural_end=False)
 
     def _cancel_wave_timers(self) -> None:
-        for name in ("_wave_retry_timer", "_wave_settings_timer", "_owner_away_timer"):
-            timer: TimerHandle | None = getattr(self, name)
-            if timer is not None:
-                timer.cancel()
+        for timer in self._wave_retry_timers.values():
+            timer.cancel()
+        self._wave_retry_timers = {}
+        self._wave_failures = {}
+        self._wave_inflight = set()
+        for name in ("_wave_settings_timer", "_owner_away_timer"):
+            handle: TimerHandle | None = getattr(self, name)
+            if handle is not None:
+                handle.cancel()
                 setattr(self, name, None)
 
     def _wave_start(self, user: RoomUser, cmd: WaveStart) -> None:
-        if not user.can_wave:
+        shared = cmd.mode is WaveMode.SHARED
+        if not user.can_wave and not shared:
             raise SubscriptionRequiredError("Для своей волны нужна подписка Плюс.")
         wave = self.wave
         replaced = is_active(wave)
@@ -1101,19 +1231,20 @@ class Room:
         if cmd.mode is WaveMode.SEED and cmd.seed is None:
             raise ValidationError("Не выбрано, от чего запускать волну.")
         self._cancel_wave_timers()
-        self._wave_failures = 0
+        self._no_sources_announced = False
         wave.generation += 1
         wave.wave_id = secrets.token_urlsafe(8)
         wave.status = WaveStatus.STARTING
         wave.mode = cmd.mode
-        wave.owner_id = user.id
-        wave.owner_name = user.name
+        wave.owner_id = None if shared else user.id
+        wave.owner_name = None if shared else user.name
         wave.owner_left_at_ms = None
         wave.seed = cmd.seed if cmd.mode is WaveMode.SEED else None
         wave.settings = list(cmd.settings)
-        wave.session_id = None
+        wave.sessions = {}
         wave.buffer = []
         wave.last_from_wave = False
+        wave.last_source_id = None
         current = self.queue.current
         prune_meta(wave, {current.id} if current is not None else set())
         if self.queue.repeat is RepeatMode.QUEUE:
@@ -1121,20 +1252,24 @@ class Room:
             self.queue.set_repeat(RepeatMode.OFF)
             self._publish_queue()
             self._event(EventKind.REPEAT, user, repeat=RepeatMode.OFF)
-        self._event(
-            EventKind.WAVE_REPLACED if replaced else EventKind.WAVE_STARTED,
-            user,
-            title=wave.seed.label if wave.seed is not None else None,
-        )
+        if shared:
+            self._event(EventKind.WAVE_SHARED_STARTED, user)
+        else:
+            self._event(
+                EventKind.WAVE_REPLACED if replaced else EventKind.WAVE_STARTED,
+                user,
+                title=wave.seed.label if wave.seed is not None else None,
+            )
         self._publish_wave()
         self._changed()
+        self._wave_sources_changed()
         self._wave_refill()
 
     def _wave_stop(self, by: RoomUser | None, reason: WaveStopReason) -> None:
         """Текущий трек доигрывает и получает свой итог: метаданные текущего элемента остаются."""
         wave = self.wave
         self._cancel_wave_timers()
-        self._wave_failures = 0
+        self._source_grace = {}
         wave.generation += 1
         wave.wave_id = None
         wave.status = WaveStatus.OFF
@@ -1144,7 +1279,7 @@ class Room:
         wave.owner_left_at_ms = None
         wave.seed = None
         wave.settings = []
-        wave.session_id = None
+        wave.sessions = {}
         wave.buffer = []
         current = self.queue.current
         prune_meta(wave, {current.id} if current is not None else set())
@@ -1153,29 +1288,60 @@ class Room:
         self._changed()
 
     async def stop_wave_of(self, user_id: str) -> None:
-        """Владелец вышел из аккаунта: его токеном больше ничего не запрашиваем."""
+        """Пользователь вышел из аккаунта: его токеном больше ничего не запрашиваем."""
         async with self.lock:
             if self.wave.owner_id == user_id and is_active(self.wave):
                 self._wave_stop(None, WaveStopReason.OWNER_GONE)
+            elif self._is_shared:
+                self._drop_source(user_id)
+
+    def _drop_source(self, user_id: str) -> None:
+        """Источник больше не может участвовать, пока снова не войдёт в комнату."""
+        self._banned_sources.add(user_id)
+        self._source_grace.pop(user_id, None)
+        self._wave_sources_changed()
+
+    def _arm_source_grace(self, user_id: str) -> None:
+        async def expired() -> None:
+            async with self.lock:
+                unlocked = any(
+                    c.user.id == user_id and c.audio_unlocked for c in self.clients.values()
+                )
+                if not unlocked and self._source_grace.pop(user_id, None) is not None:
+                    self._wave_sources_changed()
+
+        self._timers.call_later(LEAVE_GRACE_MS, expired)
+
+    def _wave_set_participation(self, user: RoomUser, *, enabled: bool) -> None:
+        opted_out = self.wave.opted_out
+        if enabled and user.id in opted_out:
+            opted_out.remove(user.id)
+        elif not enabled and user.id not in opted_out:
+            opted_out.append(user.id)
+        else:
+            return
+        self._changed()
+        self._wave_sources_changed()
 
     def _wave_update_settings(self, user: RoomUser, settings: list[str]) -> None:
         wave = self.wave
         if not is_active(wave):
             raise ValidationError("Волна не играет.")
-        if wave.owner_id != user.id:
+        if wave.mode is not WaveMode.SHARED and wave.owner_id != user.id:
             raise ForbiddenError("Настройки волны меняет её владелец.")
         if settings == wave.settings:
             return
         wave.generation += 1
         wave.settings = list(settings)
-        wave.session_id = None
+        wave.sessions = {}
         wave.buffer = []
         current = self.queue.current
         prune_meta(wave, {current.id} if current is not None else set())
         wave.status = WaveStatus.STARTING
-        if self._wave_retry_timer is not None:
-            self._wave_retry_timer.cancel()
-            self._wave_retry_timer = None
+        for timer in self._wave_retry_timers.values():
+            timer.cancel()
+        self._wave_retry_timers = {}
+        self._wave_inflight = set()
         if self._wave_settings_timer is not None:
             self._wave_settings_timer.cancel()
 
@@ -1256,9 +1422,19 @@ class Room:
     def _wave_on_join(self) -> None:
         """Вход: владелец вернулся — окно отменяется; после рестарта таймер поднимается заново."""
         wave = self.wave
-        if not is_active(wave) or wave.owner_id is None:
+        if not is_active(wave):
             return
-        if self._user_online(wave.owner_id):
+        if self._is_shared:
+            # Перезагрузка вкладки: звук разблокируется чуть позже входа, а до тех пор источник
+            # остаётся в ротации. Не разблокировал за отведённое время — выпадает.
+            for client in self.clients.values():
+                self._banned_sources.discard(client.user.id)
+                if client.user.id in self._source_grace and not client.audio_unlocked:
+                    self._arm_source_grace(client.user.id)
+            self._wave_sources_changed()
+        elif wave.owner_id is None:
+            return
+        elif self._user_online(wave.owner_id):
             if wave.owner_left_at_ms is not None:
                 wave.owner_left_at_ms = None
                 if self._owner_away_timer is not None:

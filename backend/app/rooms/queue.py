@@ -29,6 +29,7 @@ class QueueOrigin(ApiModel):
     owner_id: str | None = None
     owner_name: str | None = None
     seed_label: str | None = None
+    shared: bool = False
 
 
 class QueueItem(ApiModel):

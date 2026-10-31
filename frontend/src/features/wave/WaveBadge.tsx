@@ -6,6 +6,7 @@ import type { QueueItem } from '@/shared/protocol/generated'
 function sourceLabel(item: QueueItem, addedByName: string | undefined): string | null {
   const { origin } = item
   if (origin.kind === 'wave') {
+    if (origin.shared) return `Общая волна · ${origin.ownerName ?? ''}`
     if (origin.seedLabel) return `Волна по: ${origin.seedLabel}`
     return origin.ownerName ? `Моя волна · ${origin.ownerName}` : 'Моя волна'
   }

@@ -42,7 +42,8 @@ export function WavePanel() {
   })
   const [draft, setDraft] = useState<string[]>([])
   const active = wave !== null && wave.status !== 'off'
-  const mine = active && wave.ownerId === selfId
+  const shared = active && wave.mode === 'shared'
+  const mine = active && (shared || wave.ownerId === selfId)
   const settings = active ? wave.settings : draft
 
   const changeSetting = (group: WaveOptionGroup, seed: string): void => {
@@ -67,6 +68,13 @@ export function WavePanel() {
         >
           {active && !mine ? 'Включить мою волну вместо этой' : 'Включить мою волну'}
         </Button>
+        <Button
+          className="w-full"
+          disabled={shared}
+          onClick={() => void start('shared', { settings })}
+        >
+          Общая волна
+        </Button>
         <p className="text-fg-muted text-sm">
           Бесконечный поток рекомендаций для всей комнаты. Ручные треки играют первыми.
         </p>
@@ -76,6 +84,8 @@ export function WavePanel() {
           </Button>
         )}
       </div>
+
+      <Participation />
 
       <SeedFromCurrent />
 
@@ -134,14 +144,21 @@ export function WavePanel() {
 function WaveStatus() {
   const wave = useRoomStore((s) => s.wave)
   if (!wave || wave.status === 'off') return null
-  const who = wave.seedLabel ? `Волна по: ${wave.seedLabel}` : `Моя волна · ${wave.ownerName ?? ''}`
+  const who =
+    wave.mode === 'shared'
+      ? 'Общая волна'
+      : wave.seedLabel
+        ? `Волна по: ${wave.seedLabel}`
+        : `Моя волна · ${wave.ownerName ?? ''}`
   const state =
     wave.status === 'starting'
       ? 'Запускаем…'
       : wave.status === 'unavailable'
         ? 'Временно недоступна, пробуем снова'
         : wave.status === 'waiting'
-          ? 'Подбираем треки…'
+          ? wave.mode === 'shared' && !wave.sources.some((source) => source.active)
+            ? 'В общей волне никого нет: ждём участников'
+            : 'Подбираем треки…'
           : wave.ownerAway
             ? 'Владелец вышел: через 15 минут волна остановится'
             : 'Играет'
@@ -150,6 +167,36 @@ function WaveStatus() {
       <p className="font-semibold">{who}</p>
       <p className="text-fg-muted text-sm">{state}</p>
     </div>
+  )
+}
+
+/** Кто даёт треки в общую волну и переключатель «Моя волна участвует». */
+function Participation() {
+  const wave = useRoomStore((s) => s.wave)
+  const selfId = useRoomStore((s) => s.selfUserId)
+  const send = useCommand()
+  if (wave?.mode !== 'shared' || wave.status === 'off') return null
+  const me = wave.sources.find((source) => source.userId === selfId)
+  const active = wave.sources.filter((source) => source.active)
+  return (
+    <section className="space-y-2" aria-label="Участники общей волны">
+      <p className="text-fg-muted text-sm" data-testid="wave-sources">
+        Участвуют: {active.map((source) => source.name).join(', ') || 'пока никто'}
+      </p>
+      {me && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={me.enabled}
+            onChange={(e) => {
+              void send({ type: 'wave.set_participation', enabled: e.target.checked })
+            }}
+            className="accent-[var(--c-accent)]"
+          />
+          Моя волна участвует
+        </label>
+      )}
+    </section>
   )
 }
 

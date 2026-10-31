@@ -9,13 +9,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
 from app.core.schema import ApiModel
 from app.providers.base import Track
 from app.rooms.queue import QueueItem, QueueOrigin, make_item
 
 WAVE_BUFFER_MIN = 3
+SHARED_SOURCE_MIN = 2
 WAVE_PREVIEW = 5
 WAVE_RECENT_LIMIT = 100
 OWNER_GRACE_MS = 15 * 60 * 1000
@@ -27,6 +28,7 @@ MY_WAVE_SEED = "user:onyourwave"
 class WaveMode(StrEnum):
     PERSONAL = "personal"
     SEED = "seed"
+    SHARED = "shared"
 
 
 class WaveStatus(StrEnum):
@@ -73,6 +75,9 @@ class WaveMeta(ApiModel):
 class WaveState(ApiModel):
     """Сохраняемое состояние волны: уходит в `rooms.state`, клиентам — только `WaveView`."""
 
+    # Снимок другой версии кода не должен терять комнату: лишние поля просто забываем.
+    model_config = ConfigDict(extra="ignore")
+
     version: int = 0
     generation: int = 0
     """Растёт при старте, замене, остановке и смене настроек: поздние ответы отбрасываются."""
@@ -84,7 +89,12 @@ class WaveState(ApiModel):
     owner_left_at_ms: int | None = None
     seed: WaveSeed | None = None
     settings: list[str] = []
-    session_id: str | None = None
+    sessions: dict[str, str] = {}
+    """Пользователь → его сессия ротора. Без режима общей волны запись одна."""
+    opted_out: list[str] = []
+    """Кто выключил «Моя волна участвует». Переживает остановку волны."""
+    last_source_id: str | None = None
+    """Чей трек волны взят последним: с кого продолжать круг."""
     buffer: list[QueueItem] = []
     meta: dict[str, WaveMeta] = {}
     recent_track_ids: list[str] = []
@@ -92,6 +102,15 @@ class WaveState(ApiModel):
     """Элемент волны, для которого отправлен `trackStarted`."""
     played_ms: int = 0
     last_from_wave: bool = False
+
+
+class WaveSourceView(ApiModel):
+    user_id: str
+    name: str
+    enabled: bool
+    """Переключатель «Моя волна участвует»."""
+    active: bool
+    """Сейчас в ротации: включено, онлайн, звук разблокирован, есть Плюс."""
 
 
 class WaveView(ApiModel):
@@ -104,6 +123,7 @@ class WaveView(ApiModel):
     owner_away: bool = False
     seed_label: str | None = None
     settings: list[str] = []
+    sources: list[WaveSourceView] = []
     next: list[QueueItem] = []
     next_track_id: str | None = None
     """Что заиграет следующим по решению сервера: клиент предзагружает именно это."""
@@ -118,12 +138,13 @@ def api_seeds(state: WaveState) -> list[str]:
     return [base, *state.settings]
 
 
-def origin_for(state: WaveState) -> QueueOrigin:
+def origin_for(state: WaveState, owner_id: str, owner_name: str | None) -> QueueOrigin:
     return QueueOrigin(
         kind="wave",
-        owner_id=state.owner_id,
-        owner_name=state.owner_name,
+        owner_id=owner_id,
+        owner_name=owner_name,
         seed_label=state.seed.label if state.seed is not None else None,
+        shared=state.mode is WaveMode.SHARED,
     )
 
 
@@ -138,14 +159,15 @@ def accept_batch(
     state: WaveState,
     tracks: list[Track],
     *,
+    owner_id: str,
+    owner_name: str | None,
     session_id: str,
     batch_id: str | None,
     queued_track_ids: set[str],
     now_ms: int,
 ) -> int:
     """Положить порцию в буфер без повторов. Возвращает, сколько треков принято."""
-    owner_id = state.owner_id or ""
-    origin = origin_for(state)
+    origin = origin_for(state, owner_id, owner_name)
     seen = set(state.recent_track_ids) | queued_track_ids
     accepted = 0
     for track in tracks:
@@ -171,8 +193,39 @@ def takes_from_wave(state: WaveState, *, upcoming_count: int, mix: WaveMix) -> b
     return mix is WaveMix.ALTERNATE and not state.last_from_wave
 
 
-def needs_refill(state: WaveState) -> bool:
-    return is_active(state) and len(state.buffer) < WAVE_BUFFER_MIN
+def needs_refill(state: WaveState, source_id: str, source_count: int = 1) -> bool:
+    """Мало треков этого источника. В общей волне буфер делится между источниками."""
+    if not is_active(state):
+        return False
+    have = sum(1 for item in state.buffer if item.added_by == source_id)
+    wanted = WAVE_BUFFER_MIN if source_count <= 1 else SHARED_SOURCE_MIN
+    return have < wanted
+
+
+def round_robin(state: WaveState, source_ids: list[str]) -> None:
+    """Выстроить буфер по кругу: начиная с источника после того, чей трек взят последним.
+
+    Порядок внутри источника сохраняется; у кого треки кончились, тот пропускает свою очередь.
+    """
+    if len(source_ids) <= 1:
+        return
+    if state.last_source_id in source_ids:
+        start = source_ids.index(state.last_source_id) + 1
+        source_ids = source_ids[start:] + source_ids[:start]
+    pending = {source: [i for i in state.buffer if i.added_by == source] for source in source_ids}
+    merged: list[QueueItem] = []
+    while any(pending.values()):
+        for source in source_ids:
+            if pending[source]:
+                merged.append(pending[source].pop(0))
+    state.buffer = merged
+
+
+def drop_sources_except(state: WaveState, source_ids: set[str]) -> None:
+    """Выпавшие источники: их будущие треки убираем, текущий трек доигрывает."""
+    for item in [i for i in state.buffer if i.added_by not in source_ids]:
+        state.buffer.remove(item)
+        state.meta.pop(item.id, None)
 
 
 def prune_meta(state: WaveState, keep: set[str]) -> None:

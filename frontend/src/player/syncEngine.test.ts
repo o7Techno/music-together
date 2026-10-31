@@ -41,7 +41,7 @@ function queueWith(nextTrackId: string): QueueState {
     },
     addedBy: 'u',
     addedAtMs: 0,
-    origin: { kind: 'manual', ownerId: null, ownerName: null, seedLabel: null },
+    origin: { kind: 'manual', ownerId: null, ownerName: null, seedLabel: null, shared: false },
   })
   return {
     version: 1,
@@ -253,6 +253,7 @@ describe('SyncEngine', () => {
       ownerAway: false,
       seedLabel: null,
       settings: [],
+      sources: [],
       next: [],
       nextTrackId: 'w2',
       ...over,

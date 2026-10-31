@@ -369,7 +369,9 @@ class FakeProvider:
         if self.world.empty_batches > 0:
             self.world.empty_batches -= 1
             return WaveBatch(session_id=session_id, batch_id="empty", tracks=[])
-        digest = hashlib.sha256(",".join(session.seeds).encode()).hexdigest()[:6]
+        # У каждого своя выдача: иначе в общей волне все треки были бы дубликатами.
+        key = ",".join([session.user_key, *session.seeds])
+        digest = hashlib.sha256(key.encode()).hexdigest()[:6]
         recent = set(recent_ids)
         tracks: list[Track] = []
         while len(tracks) < WAVE_BATCH_SIZE:

@@ -36,6 +36,7 @@ export type ClientMessage =
   | WaveStart
   | WaveStop
   | WaveUpdateSettings
+  | WaveSetParticipation
   | WavePin
   | WaveRemove
   | TrackDislike
@@ -50,7 +51,7 @@ export type AddPosition1 = 'end' | 'next' | 'now'
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "WaveMode".
  */
-export type WaveMode = 'personal' | 'seed'
+export type WaveMode = 'personal' | 'seed' | 'shared'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "CloseReason".
@@ -82,6 +83,8 @@ export type EventKind =
   | 'wave_stopped'
   | 'wave_unavailable'
   | 'wave_resumed'
+  | 'wave_shared_started'
+  | 'wave_no_sources'
   | 'track_liked'
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -221,6 +224,8 @@ export interface Protocol {
   WavePin?: WavePin
   WaveRemove?: WaveRemove
   WaveSeed?: WaveSeed
+  WaveSetParticipation?: WaveSetParticipation
+  WaveSourceView?: WaveSourceView
   WaveStart?: WaveStart
   WaveStation?: WaveStation
   WaveStatus?: WaveStatus1
@@ -564,6 +569,15 @@ export interface WaveUpdateSettings {
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveSetParticipation".
+ */
+export interface WaveSetParticipation {
+  type: 'wave.set_participation'
+  clientMsgId: string
+  enabled: boolean
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
  * via the `definition` "WavePin".
  */
 export interface WavePin {
@@ -773,6 +787,7 @@ export interface QueueOrigin {
   ownerId: string | null
   ownerName: string | null
   seedLabel: string | null
+  shared: boolean
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -806,6 +821,7 @@ export interface QueueOrigin1 {
   ownerId: string | null
   ownerName: string | null
   seedLabel: string | null
+  shared: boolean
 }
 /**
  * This interface was referenced by `Protocol`'s JSON-Schema
@@ -939,8 +955,19 @@ export interface WaveView {
   ownerAway: boolean
   seedLabel: string | null
   settings: string[]
+  sources: WaveSourceView[]
   next: QueueItem[]
   nextTrackId: string | null
+}
+/**
+ * This interface was referenced by `Protocol`'s JSON-Schema
+ * via the `definition` "WaveSourceView".
+ */
+export interface WaveSourceView {
+  userId: string
+  name: string
+  enabled: boolean
+  active: boolean
 }
 /**
  * Кто лайкнул текущий элемент очереди в этой комнате.
@@ -971,6 +998,7 @@ export interface WaveView1 {
   ownerAway: boolean
   seedLabel: string | null
   settings: string[]
+  sources: WaveSourceView[]
   next: QueueItem[]
   nextTrackId: string | null
 }

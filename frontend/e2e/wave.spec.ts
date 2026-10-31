@@ -138,3 +138,26 @@ test('repeat button skips queue mode while the wave is on', async ({ browser }) 
   await anna.getByRole('button', { name: 'Повтор выключен' }).click()
   await expect(anna.getByRole('button', { name: 'Повтор трека' })).toBeVisible()
 })
+
+test('shared wave alternates tracks of two members; a member can opt out', async ({ browser }) => {
+  const [anna, petya] = await pair(browser)
+  await anna.getByRole('tab', { name: 'Волна' }).click()
+  await anna.getByRole('button', { name: 'Общая волна', exact: true }).click()
+  await expect(petya.getByTestId('events')).toContainText('включил(а) общую волну')
+  await expect(anna.getByTestId('wave-sources')).toContainText('Аня')
+  await expect(anna.getByTestId('wave-sources')).toContainText('Петя')
+
+  const first = await currentWaveTrack(anna)
+  await waitPlaying(anna, first)
+  const sourceOne = await anna.getByTestId('track-source').textContent()
+  expect(sourceOne).toMatch(/^Общая волна · (Аня|Петя)$/)
+
+  await anna.getByRole('button', { name: 'Следующий', exact: true }).click()
+  await expect.poll(async () => (await probe(anna))?.trackId).not.toBe(first)
+  await expect(anna.getByTestId('track-source')).not.toHaveText(sourceOne ?? '')
+
+  await petya.getByRole('tab', { name: 'Волна' }).click()
+  await petya.getByLabel('Моя волна участвует').click()
+  await expect(anna.getByTestId('wave-sources')).not.toContainText('Петя')
+  await expect(petya.getByLabel('Моя волна участвует')).not.toBeChecked()
+})

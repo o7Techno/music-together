@@ -363,3 +363,43 @@ async def test_wave_options_are_available(live: Live) -> None:
     options = (await anna.http.get("/api/me/wave/options")).json()
     assert options["settings"]
     assert {s["kind"] for s in options["stations"]} >= {"mood", "activity"}
+
+
+async def test_shared_wave_alternates_sources_and_routes_feedback(live: Live) -> None:
+    anna, petya, slug = await pair(live.base)
+    a, _ = await joined(anna, slug)
+    p, _ = await joined(petya, slug)
+    await asyncio.sleep(0.05)
+    await a.send({"type": "wave.start", "mode": "shared"})
+    message = await a.wait_for(
+        "wave", lambda m: len({i["addedBy"] for i in m["wave"]["next"]}) == 2
+    )
+    assert message["wave"]["ownerId"] is None
+    assert {s["userId"] for s in message["wave"]["sources"] if s["active"]} == {
+        anna.user_id,
+        petya.user_id,
+    }
+
+    owners: list[str] = []
+    for _ in range(3):
+        loading = await a.wait_for("playback", lambda m: m["state"]["status"] == "loading")
+        await a.send({"type": "ready", "version": loading["state"]["version"]})
+        await p.send({"type": "ready", "version": loading["state"]["version"]})
+        state = await a.wait_for("playback", lambda m: m["state"]["status"] == "playing")
+        owners.append(latest_queue(a)["queue"]["current"]["addedBy"])
+        await a.send({"type": "cmd.next", "expectedQueueItemId": state["state"]["queueItemId"]})
+    assert owners[0] != owners[1]
+    assert owners[0] == owners[2]
+
+    def skipped() -> list[str]:
+        return [u for u, _, e in live.world.feedback if e.kind.value == "skip"]
+
+    await eventually(lambda: len(skipped()) == 3)
+    # Очереди фидбека у пользователей независимы: общего порядка между ними нет.
+    assert sorted(skipped()) == sorted(owners)
+    await a.close()
+    await p.close()
+
+
+def latest_queue(ws: Socket) -> dict[str, Any]:
+    return [m for m in ws.inbox if m["type"] == "queue"][-1]

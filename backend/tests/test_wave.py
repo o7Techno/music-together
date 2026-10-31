@@ -16,7 +16,7 @@ from app.providers.base import (
 )
 from app.rooms.playback import PlaybackStatus
 from app.rooms.queue import QueueState, RepeatMode
-from app.rooms.room import Room, RoomUser
+from app.rooms.room import LEAVE_GRACE_MS, Room, RoomUser
 from app.rooms.timers import FakeTimers
 from app.rooms.wave import (
     RETRY_DELAYS_MS,
@@ -46,6 +46,7 @@ from app.ws.protocol import (
     WaveMessage,
     WavePin,
     WaveRemove,
+    WaveSetParticipation,
     WaveStart,
     WaveStop,
     WaveStopReason,
@@ -152,6 +153,12 @@ class Env:
                 client_msg_id=self.mid(), expected_queue_item_id=self.room.playback.queue_item_id
             ),
         )
+
+    async def play_barrier_all(self) -> None:
+        for conn in list(self.room.clients):
+            await self.room.ready(conn, Ready(version=self.room.playback.version))
+        assert self.room.playback.status is PlaybackStatus.PLAYING
+        await self.timers.advance(300)
 
     def current(self) -> str | None:
         return self.room.playback.track_id
@@ -774,7 +781,7 @@ async def test_restored_wave_continues_session_without_radio_started(env: Env) -
     await two_listeners(env)
     fresh = await restored(env, left_ago_ms=None)
     await fresh.join("c1", ANNA)
-    assert fresh.room.wave.session_id == "s1"
+    assert fresh.room.wave.sessions[ANNA.id] == "s1"
     assert fresh.driver.events == []
     assert fresh.room.wave.buffer
 
@@ -796,3 +803,216 @@ async def test_close_all_cancels_wave_timers(env: Env) -> None:
     env.room.close_all(CloseReason.RESTART)
     await env.timers.advance(GRACE_MS * 2)
     assert env.status() is WaveStatus.PLAYING
+
+
+# ── Общая волна ─────────────────────────────────────────────────────────────────
+
+
+async def shared_batch(env: Env, owner: RoomUser, *names: str) -> list[str]:
+    await env.room.apply_wave_batch(
+        env.room.wave.generation,
+        WaveBatch(
+            session_id=f"s-{owner.id}",
+            batch_id=f"b-{owner.id}",
+            tracks=[track(n) for n in names],
+        ),
+        owner_id=owner.id,
+        owner_name=owner.name,
+    )
+    return [f"t{n}" for n in names]
+
+
+async def shared_room(env: Env) -> None:
+    await env.join("c1", ANNA)
+    await env.join("c2", PETYA)
+    await env.room.handle("c1", WaveStart(client_msg_id=env.mid(), mode=WaveMode.SHARED))
+
+
+def buffer_owners(env: Env) -> list[str]:
+    return [i.added_by for i in env.room.wave.buffer]
+
+
+def requested(env: Env) -> list[str]:
+    return [r.owner_id for r in env.driver.requests]
+
+
+async def test_shared_requests_each_participant_with_their_token(env: Env) -> None:
+    await shared_room(env)
+    assert sorted(requested(env)) == [ANNA.id, PETYA.id]
+    assert env.status() is WaveStatus.STARTING
+    assert EventKind.WAVE_SHARED_STARTED in env.events()
+
+
+async def test_shared_interleaves_sources_round_robin(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    assert env.room.queue.current is not None
+    assert env.room.queue.current.track.id == "ta1"
+    assert buffer_owners(env) == [PETYA.id, ANNA.id, PETYA.id, ANNA.id, PETYA.id]
+    assert env.room.queue.current.origin.shared is True
+    assert env.room.queue.current.origin.owner_name == "Аня"
+
+
+async def test_shared_feedback_goes_to_source_of_each_track(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2")
+    await shared_batch(env, PETYA, "p1", "p2")
+    await env.play_barrier_all()
+    await env.next("c2")
+    await env.play_barrier_all()
+    await env.next("c1")
+    finished = [
+        (u, s, e.track_id) for u, s, e in env.driver.events if e.kind is WaveFeedbackKind.SKIP
+    ]
+    assert finished == [(ANNA.id, "s-u1", "ta1"), (PETYA.id, "s-u2", "tp1")]
+    started = [u for u, _, e in env.driver.events if e.kind is WaveFeedbackKind.RADIO_STARTED]
+    assert sorted(started) == [ANNA.id, PETYA.id]
+
+
+async def test_shared_duplicates_between_sources_are_filtered(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "same", "a2")
+    await shared_batch(env, PETYA, "same", "p2")
+    ids = [i.track.id for i in env.room.wave.buffer]
+    assert ids.count("tsame") == 0
+    assert env.room.queue.current is not None
+    assert env.room.queue.current.track.id == "tsame"
+    assert "tp2" in ids
+
+
+async def test_shared_source_drops_after_grace_and_returns(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    await env.room.leave("c2")
+    assert PETYA.id in buffer_owners(env)  # перезагрузка вкладки не дёргает ротацию
+    await env.timers.advance(LEAVE_GRACE_MS)
+    assert PETYA.id not in buffer_owners(env)
+    views = {v.user_id: v for v in env.room._wave_view().sources}
+    assert PETYA.id not in views
+    await env.join("c2b", PETYA)
+    assert PETYA.id in requested(env)[-1:]
+    await shared_batch(env, PETYA, "p9")
+    assert PETYA.id in buffer_owners(env)
+
+
+async def test_shared_reload_within_grace_keeps_source(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    await env.room.leave("c2")
+    await env.join("c2b", PETYA)
+    await env.timers.advance(LEAVE_GRACE_MS * 2)
+    assert PETYA.id in buffer_owners(env)
+
+
+async def test_shared_locked_audio_or_no_plus_are_not_sources(env: Env) -> None:
+    await env.room.join("c1", ANNA)  # звук не разблокирован
+    await env.join("c2", RoomUser(id="u3", name="Без Плюса", can_wave=False))
+    await env.join("c3", PETYA)
+    await env.room.handle("c3", WaveStart(client_msg_id=env.mid(), mode=WaveMode.SHARED))
+    assert requested(env) == [PETYA.id]
+    await env.room.update_client_status("c1", ClientStatus(audio_unlocked=True))
+    assert sorted(requested(env)) == [ANNA.id, PETYA.id]
+
+
+async def test_participation_switch_removes_and_returns_source(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    await env.room.handle("c2", WaveSetParticipation(client_msg_id=env.mid(), enabled=False))
+    assert PETYA.id not in buffer_owners(env)
+    view = {v.user_id: v for v in env.room._wave_view().sources}
+    assert (view[PETYA.id].enabled, view[PETYA.id].active) == (False, False)
+    await env.room.handle("c2", WaveSetParticipation(client_msg_id=env.mid(), enabled=True))
+    assert requested(env)[-1] == PETYA.id
+
+
+async def test_shared_without_sources_waits_and_revives(env: Env) -> None:
+    await env.join("c1", ANNA)
+    await env.room.handle("c1", WaveSetParticipation(client_msg_id=env.mid(), enabled=False))
+    await env.room.handle("c1", WaveStart(client_msg_id=env.mid(), mode=WaveMode.SHARED))
+    assert env.status() is WaveStatus.WAITING
+    assert EventKind.WAVE_NO_SOURCES in env.events()
+    assert env.driver.requests == []
+    await env.timers.advance(GRACE_MS * 10)
+    assert env.status() is WaveStatus.WAITING  # сама не выключается (D-040)
+    await env.room.handle("c1", WaveSetParticipation(client_msg_id=env.mid(), enabled=True))
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    assert env.status() is WaveStatus.PLAYING
+    assert env.current() == "ta1"
+
+
+async def test_shared_auth_failure_drops_only_that_source(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await env.room.apply_wave_failure(env.room.wave.generation, fatal=True, owner_id=PETYA.id)
+    assert env.status() is WaveStatus.PLAYING
+    await env.room.stop_wave_of(ANNA.id)
+    assert env.status() is WaveStatus.WAITING
+    assert env.room.wave.buffer == []
+
+
+async def test_shared_failure_of_one_source_does_not_block_the_other(env: Env) -> None:
+    await shared_room(env)
+    await env.room.apply_wave_failure(env.room.wave.generation, fatal=False, owner_id=PETYA.id)
+    assert env.status() is WaveStatus.UNAVAILABLE
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    assert env.status() is WaveStatus.PLAYING
+    assert buffer_owners(env) == [ANNA.id, ANNA.id]
+    count = requested(env).count(PETYA.id)
+    await env.timers.advance(RETRY_DELAYS_MS[0])
+    assert requested(env).count(PETYA.id) == count + 1
+
+
+async def test_shared_batch_from_dropped_source_is_ignored(env: Env) -> None:
+    await shared_room(env)
+    await env.room.handle("c2", WaveSetParticipation(client_msg_id=env.mid(), enabled=False))
+    await shared_batch(env, PETYA, "p1")
+    assert env.room.wave.buffer == []
+    assert env.current() is None
+
+
+async def test_shared_settings_can_be_changed_by_any_participant(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await env.room.handle(
+        "c2", WaveUpdateSettings(client_msg_id=env.mid(), settings=["settingLanguage:russian"])
+    )
+    before = len(env.driver.requests)
+    await env.timers.advance(SETTINGS_DEBOUNCE_MS)
+    new = env.driver.requests[before:]
+    assert sorted(r.owner_id for r in new) == [ANNA.id, PETYA.id]
+    assert all(r.session_id is None for r in new)
+    assert all("settingLanguage:russian" in r.seeds for r in new)
+
+
+async def test_shared_has_no_owner_window_and_kick_only_drops_source(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    await env.room.leave("c1")
+    await env.timers.advance(GRACE_MS * 2)
+    assert env.status() is WaveStatus.PLAYING
+    await env.join("c1b", ANNA)
+    async with env.room.lock:
+        env.room.kick(PETYA.id, ANNA)
+    assert env.status() is WaveStatus.PLAYING
+    assert PETYA.id not in buffer_owners(env)
+
+
+async def test_shared_state_survives_restart(env: Env) -> None:
+    await shared_room(env)
+    await shared_batch(env, ANNA, "a1", "a2", "a3")
+    await shared_batch(env, PETYA, "p1", "p2", "p3")
+    restored_state = WaveState.model_validate(
+        env.room.persisted_wave().model_dump(mode="json", by_alias=False)
+    )
+    fresh = Env(wave=restored_state, queue=env.room.queue.snapshot())
+    await fresh.join("c1", ANNA)
+    assert fresh.status() is WaveStatus.PLAYING
+    assert fresh.room.wave.sessions[ANNA.id] == "s-u1"
+    # Петя ещё не вернулся: его трекам места нет, пока он не войдёт.
+    assert PETYA.id not in buffer_owners(fresh)
+    assert ANNA.id in buffer_owners(fresh)

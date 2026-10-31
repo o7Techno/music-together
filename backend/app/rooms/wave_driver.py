@@ -46,6 +46,7 @@ ALWAYS_SENT = {WaveFeedbackKind.LIKE, WaveFeedbackKind.UNLIKE, WaveFeedbackKind.
 class WaveRequest:
     generation: int
     owner_id: str
+    owner_name: str | None
     session_id: str | None
     seeds: list[str]
     recent_ids: list[str]
@@ -92,15 +93,24 @@ class ProviderWaveDriver:
             batch = await self._load_batch(request)
         except (ProviderAuthError, SubscriptionRequiredError) as e:
             log.info("wave_owner_cannot_play", room=room.slug, error=e.code)
-            await room.apply_wave_failure(request.generation, fatal=True)
+            await room.apply_wave_failure(request.generation, fatal=True, owner_id=request.owner_id)
         except ProviderError as e:
             log.info("wave_batch_failed", room=room.slug, error=e.code)
-            await room.apply_wave_failure(request.generation, fatal=False)
+            await room.apply_wave_failure(
+                request.generation, fatal=False, owner_id=request.owner_id
+            )
         except Exception:
             log.exception("wave_batch_crashed", room=room.slug)
-            await room.apply_wave_failure(request.generation, fatal=False)
+            await room.apply_wave_failure(
+                request.generation, fatal=False, owner_id=request.owner_id
+            )
         else:
-            await room.apply_wave_batch(request.generation, batch)
+            await room.apply_wave_batch(
+                request.generation,
+                batch,
+                owner_id=request.owner_id,
+                owner_name=request.owner_name,
+            )
 
     async def _load_batch(self, request: WaveRequest) -> WaveBatch:
         user, provider = await self._provider(request.owner_id)

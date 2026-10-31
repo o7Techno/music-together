@@ -82,6 +82,10 @@ export function eventText(e: RoomEvent): string {
       return 'Волна временно недоступна — пробуем снова'
     case 'wave_resumed':
       return 'Волна снова играет'
+    case 'wave_shared_started':
+      return `${who} включил(а) общую волну`
+    case 'wave_no_sources':
+      return 'В общей волне никого нет — ждём участников'
     case 'track_liked':
       return `${who} лайкнул(а) «${e.title ?? ''}»`
   }
@@ -111,6 +115,7 @@ export function isToastWorthy(e: RoomEvent): boolean {
     'play_item',
     'queue_clear',
     'wave_started',
+    'wave_shared_started',
     'wave_replaced',
     'wave_stopped',
     'wave_unavailable',

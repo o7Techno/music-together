@@ -254,6 +254,12 @@
     "WaveSeed": {
       "$ref": "#/$defs/WaveSeed"
     },
+    "WaveSetParticipation": {
+      "$ref": "#/$defs/WaveSetParticipation"
+    },
+    "WaveSourceView": {
+      "$ref": "#/$defs/WaveSourceView"
+    },
     "WaveStart": {
       "$ref": "#/$defs/WaveStart"
     },
@@ -635,6 +641,7 @@
           "track.dislike": "#/$defs/TrackDislike",
           "wave.pin": "#/$defs/WavePin",
           "wave.remove": "#/$defs/WaveRemove",
+          "wave.set_participation": "#/$defs/WaveSetParticipation",
           "wave.start": "#/$defs/WaveStart",
           "wave.stop": "#/$defs/WaveStop",
           "wave.update_settings": "#/$defs/WaveUpdateSettings"
@@ -704,6 +711,9 @@
         },
         {
           "$ref": "#/$defs/WaveUpdateSettings"
+        },
+        {
+          "$ref": "#/$defs/WaveSetParticipation"
         },
         {
           "$ref": "#/$defs/WavePin"
@@ -1122,6 +1132,8 @@
         "wave_stopped",
         "wave_unavailable",
         "wave_resumed",
+        "wave_shared_started",
+        "wave_no_sources",
         "track_liked"
       ],
       "type": "string",
@@ -1620,7 +1632,8 @@
             "kind": "manual",
             "ownerId": null,
             "ownerName": null,
-            "seedLabel": null
+            "seedLabel": null,
+            "shared": false
           }
         }
       },
@@ -1725,13 +1738,18 @@
             }
           ],
           "default": null
+        },
+        "shared": {
+          "default": false,
+          "type": "boolean"
         }
       },
       "required": [
         "kind",
         "ownerId",
         "ownerName",
-        "seedLabel"
+        "seedLabel",
+        "shared"
       ],
       "type": "object",
       "title": "QueueOrigin"
@@ -2472,6 +2490,7 @@
             "ownerAway": false,
             "seedLabel": null,
             "settings": [],
+            "sources": [],
             "next": [],
             "nextTrackId": null
           }
@@ -2857,7 +2876,8 @@
     "WaveMode": {
       "enum": [
         "personal",
-        "seed"
+        "seed",
+        "shared"
       ],
       "type": "string",
       "title": "WaveMode"
@@ -3008,6 +3028,54 @@
       ],
       "type": "object",
       "title": "WaveSeed"
+    },
+    "WaveSetParticipation": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "wave.set_participation",
+          "default": "wave.set_participation",
+          "type": "string"
+        },
+        "clientMsgId": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "clientMsgId",
+        "enabled"
+      ],
+      "type": "object",
+      "title": "WaveSetParticipation"
+    },
+    "WaveSourceView": {
+      "additionalProperties": false,
+      "properties": {
+        "userId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "active": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "enabled",
+        "active"
+      ],
+      "type": "object",
+      "title": "WaveSourceView"
     },
     "WaveStart": {
       "additionalProperties": false,
@@ -3229,6 +3297,13 @@
           },
           "type": "array"
         },
+        "sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/WaveSourceView"
+          },
+          "type": "array"
+        },
         "next": {
           "default": [],
           "items": {
@@ -3258,6 +3333,7 @@
         "ownerAway",
         "seedLabel",
         "settings",
+        "sources",
         "next",
         "nextTrackId"
       ],
