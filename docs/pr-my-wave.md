@@ -31,7 +31,7 @@ npm run e2e
 аккаунтах — `docs/manual-qa.md` §6. Методы провайдера на настоящем API: `scripts/spike_wave.py provider`.
 
 ## Результаты
-- Backend: 213 тестов, ruff, mypy. Frontend: 64 теста Vitest, eslint, tsc.
+- Backend: 213 тестов, ruff, mypy. Frontend: 59 тестов Vitest, eslint, tsc.
 - E2E локально: все сценарии, включая новый переход между треками волны в `sync.spec.ts`.
 - Настоящий API: спайк и прогон методов провайдера. **В браузере на реальном аккаунте волна не проверялась.**
 - CI запускается при открытии PR и пока не проверен.
