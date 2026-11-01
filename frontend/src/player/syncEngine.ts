@@ -88,6 +88,7 @@ export interface DebugInfo {
   seekLatencyMs: number
   startLatencyMs: number
   seekFailures: number
+  correctionSeeks: number
   unstable: boolean
   sync: SyncState
 }
@@ -159,6 +160,7 @@ export class SyncEngine {
   private lastBackgroundSeekAt = -Infinity
   private lastResumeAt = -Infinity
   private stoppedSince: number | null = null
+  private correctionSeeks = 0
   private wasInBackground = false
   private settleUntil = -Infinity
   private resumeCheckPending = false
@@ -632,6 +634,7 @@ export class SyncEngine {
     } else if (this.resumeCheckPending && !this.d.background()) {
       this.resumeCheckPending = false
       if (Math.abs(m.drift) >= RESUME_SEEK_MS) {
+        this.correctionSeeks += 1
         this.active.seek(m.expected + this.controller.seekLatencyMs)
         this.controller.noteSeek(now)
       }
@@ -640,6 +643,7 @@ export class SyncEngine {
     } else if (state && state.durationMs - m.expected > 300) {
       const action = this.controller.update(m.drift, m.expected, now)
       if (action.kind === 'seek') {
+        this.correctionSeeks += 1
         this.active.seek(action.targetMs)
       } else if (Math.abs(this.active.playbackRate - action.rate) > 0.0005) {
         this.active.playbackRate = action.rate
@@ -666,6 +670,7 @@ export class SyncEngine {
       now - this.lastBackgroundSeekAt >= BACKGROUND_SEEK_INTERVAL_MS
     ) {
       this.lastBackgroundSeekAt = now
+      this.correctionSeeks += 1
       this.active.seek(m.expected + this.controller.seekLatencyMs)
       this.controller.noteSeek(now)
     }
@@ -753,7 +758,10 @@ export class SyncEngine {
     else if (this.buffering) next = 'buffering'
     else {
       const drift = this.controller.smoothedDriftMs ?? this.lastDriftMs
-      next = drift !== null && Math.abs(drift) <= IN_SYNC_THRESHOLD_MS ? 'in_sync' : 'catching_up'
+      // Без подстройки темпом догонять нечем: до порога перемотки это и есть синхрон.
+      const { maxRateDelta, hardSeekMs } = this.controller.profile
+      const limit = maxRateDelta > 0 ? IN_SYNC_THRESHOLD_MS : hardSeekMs
+      next = drift !== null && Math.abs(drift) <= limit ? 'in_sync' : 'catching_up'
     }
     if (next !== this.sync) {
       this.sync = next
@@ -846,6 +854,7 @@ export class SyncEngine {
       seekLatencyMs: this.controller.seekLatencyMs,
       startLatencyMs: this.startLatencyMs,
       seekFailures: this.controller.seekFailureCount,
+      correctionSeeks: this.correctionSeeks,
       unstable: this.controller.unstable,
       sync: this.sync,
     }

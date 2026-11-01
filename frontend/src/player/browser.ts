@@ -130,7 +130,8 @@ export class HtmlAudioDeck implements AudioDeck {
   }
 
   set playbackRate(rate: number) {
-    this.el.playbackRate = rate
+    // Запись даже того же значения не должна доходить до iOS: там смена темпа слышна.
+    if (this.el.playbackRate !== rate) this.el.playbackRate = rate
   }
 
   bufferedAheadMs(fromMs: number): number {

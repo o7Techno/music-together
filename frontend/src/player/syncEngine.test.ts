@@ -6,6 +6,8 @@ import type {
   WaveView,
 } from '@/shared/protocol/generated'
 
+import type { DriftProfile } from './driftController'
+import { IOS_PROFILE } from './platform'
 import { BACKGROUND_HARD_SEEK_MS, RESUME_SETTLE_MS, SyncEngine } from './syncEngine'
 import { FakeClock, FakeDeck, type FakeDeckOptions, FakeResolver, FakeScheduler } from './testing'
 
@@ -54,7 +56,11 @@ function queueWith(nextTrackId: string): QueueState {
 
 function setup(
   deckOpts: FakeDeckOptions = {},
-  engineOpts: { wallNow?: (clock: FakeClock) => number; background?: () => boolean } = {},
+  engineOpts: {
+    wallNow?: (clock: FakeClock) => number
+    background?: () => boolean
+    profile?: DriftProfile
+  } = {},
 ) {
   const clock = new FakeClock()
   const scheduler = new FakeScheduler(clock)
@@ -76,7 +82,7 @@ function setup(
       }, 2 * ONE_WAY_MS)
     }
   }
-  const { wallNow, background } = engineOpts
+  const { wallNow, background, profile } = engineOpts
   engine = new SyncEngine({
     clock,
     scheduler,
@@ -84,6 +90,7 @@ function setup(
     resolver,
     send,
     background,
+    profile,
     wallNow: wallNow && (() => wallNow(clock)),
   })
   engine.start()
@@ -543,6 +550,38 @@ describe('SyncEngine', () => {
       await env.scheduler.advance(500)
       expect(env.decks[0].playCalls.length).toBe(plays)
       expect(env.decks[0].seekCalls.length).toBe(seeks)
+    })
+  })
+
+  describe('iOS profile', () => {
+    const start = async () => {
+      const env = setup({}, { profile: IOS_PROFILE })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      return env
+    }
+
+    it('never changes the playback rate and calls a small drift in sync', async () => {
+      const env = await start()
+      const seeks = env.decks[0].seekCalls.length
+      env.decks[0].seek(env.decks[0].currentTimeMs + 120)
+      await env.scheduler.advance(3000)
+      expect(env.decks[0].playbackRate).toBe(1)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1) // только наш ручной
+      expect(env.engine.sync).toBe('in_sync')
+    })
+
+    it('fixes a large drift with one seek and no endless catching up', async () => {
+      const env = await start()
+      env.decks[0].seek(env.decks[0].currentTimeMs - 300)
+      const seeks = env.decks[0].seekCalls.length
+      await env.scheduler.advance(20_000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1)
+      expect(env.decks[0].playbackRate).toBe(1)
+      expect(env.engine.debugInfo().correctionSeeks).toBe(1)
+      expect(env.engine.sync).toBe('in_sync')
     })
   })
 
