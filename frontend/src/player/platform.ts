@@ -11,7 +11,8 @@ export const IOS_PROFILE: DriftProfile = {
   deadZoneMs: 40,
   exitZoneMs: 15,
   maxRateDelta: 0,
-  hardSeekMs: 200,
+  // Перемотка слышна как запинка: на iPhone лучше небольшое отставание (D-051).
+  hardSeekMs: 400,
   minSeekIntervalMs: 5000,
 }
 

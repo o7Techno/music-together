@@ -1,5 +1,6 @@
 import type {
   ClientMessage,
+  MemberView,
   PlaybackState,
   QueueItem,
   QueueState,
@@ -469,7 +470,7 @@ describe('SyncEngine', () => {
   describe('iPhone: returning to the app', () => {
     const inBackground = async () => {
       let locked = false
-      const env = setup({}, { background: () => locked })
+      const env = setup({}, { background: () => locked, profile: IOS_PROFILE })
       await env.engine.unlock()
       await calibrated(env)
       env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
@@ -624,7 +625,7 @@ describe('SyncEngine', () => {
     it('never changes the playback rate and calls a small drift in sync', async () => {
       const env = await start()
       const seeks = env.decks[0].seekCalls.length
-      env.decks[0].seek(env.decks[0].currentTimeMs + 120)
+      env.decks[0].seek(env.decks[0].currentTimeMs + 300)
       await env.scheduler.advance(3000)
       expect(env.decks[0].playbackRate).toBe(1)
       expect(env.decks[0].seekCalls.length).toBe(seeks + 1) // только наш ручной
@@ -633,13 +634,66 @@ describe('SyncEngine', () => {
 
     it('fixes a large drift with one seek and no endless catching up', async () => {
       const env = await start()
-      env.decks[0].seek(env.decks[0].currentTimeMs - 300)
+      env.decks[0].seek(env.decks[0].currentTimeMs - 500)
       const seeks = env.decks[0].seekCalls.length
       await env.scheduler.advance(20_000)
       expect(env.decks[0].seekCalls.length).toBe(seeks + 1)
       expect(env.decks[0].playbackRate).toBe(1)
       expect(env.engine.debugInfo().correctionSeeks).toBe(1)
       expect(env.engine.sync).toBe('in_sync')
+    })
+  })
+
+  describe('iOS, alone in the room', () => {
+    const member = (connections: number): MemberView => ({
+      userId: 'u',
+      name: 'Аня',
+      avatarUrl: null,
+      online: true,
+      connections,
+      audioUnlocked: true,
+      trackUnavailable: false,
+      sync: 'in_sync',
+      driftMedianMs: null,
+      driftP95Ms: null,
+      isOwner: false,
+    })
+    const stats = { medianMs: null, p95Ms: null, samples: 0 }
+
+    const start = async (members: MemberView[]) => {
+      const env = setup({}, { profile: IOS_PROFILE })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.handleMessage({ type: 'members', members, stats })
+      env.engine.applyState(ps({ status: 'playing', anchorServerMs: env.serverNow() + 300 }), false)
+      await env.scheduler.advance(2000)
+      return env
+    }
+
+    it('does not seek on a noticeable drift and shows it as in sync', async () => {
+      const env = await start([member(1)])
+      const seeks = env.decks[0].seekCalls.length
+      env.decks[0].seek(env.decks[0].currentTimeMs - 1000)
+      await env.scheduler.advance(5000)
+      expect(env.decks[0].seekCalls.length).toBe(seeks + 1) // только наш ручной
+      expect(env.engine.sync).toBe('in_sync')
+    })
+
+    it('still fixes a drift so large the server would cut the track short', async () => {
+      const env = await start([member(1)])
+      env.decks[0].seek(env.decks[0].currentTimeMs - BACKGROUND_HARD_SEEK_MS - 500)
+      await env.scheduler.advance(1000)
+      expect(env.engine.debugInfo().correctionSeeks).toBe(1)
+    })
+
+    it('syncs normally once a second device of the same account joins', async () => {
+      const env = await start([member(1)])
+      env.decks[0].seek(env.decks[0].currentTimeMs - 1000)
+      await env.scheduler.advance(1000)
+      expect(env.engine.debugInfo().correctionSeeks).toBe(0)
+      env.engine.handleMessage({ type: 'members', members: [member(2)], stats })
+      await env.scheduler.advance(1000)
+      expect(env.engine.debugInfo().correctionSeeks).toBe(1)
     })
   })
 
