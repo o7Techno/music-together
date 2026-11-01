@@ -51,6 +51,7 @@ const BACKGROUND_SEEK_INTERVAL_MS = 30_000
 const RESUME_RETRY_MS = 3000
 /** Буферизация дольше этого — ссылка или соединение умерли: загружаем заново. */
 const STALL_RELOAD_MS = 10_000
+const LOCAL_PLAY_HOLD_MS = 5000
 /** После возврата из фона первые замеры часов неточны: столько времени звук не трогаем. */
 export const RESUME_SETTLE_MS = 2500
 /** Расхождение, накопленное в фоне, выправляем одной перемоткой, а не долгой подстройкой темпа. */
@@ -70,6 +71,8 @@ export interface SyncEngineDeps {
   wallNow?: () => number
   /** Экран iPhone заблокирован: JS замедлен, а новый аудиоэлемент система может не запустить. */
   background?: () => boolean
+  /** Кнопка экрана блокировки запускает звук сразу: позже система может этого не разрешить (iOS). */
+  startsLocally?: boolean
 }
 
 export interface DebugInfo {
@@ -167,6 +170,8 @@ export class SyncEngine {
   private bufferingSince: number | null = null
   /** Пауза нажата на экране блокировки: команда ещё идёт на сервер, звук не возобновлять. */
   private pausedLocally = false
+  /** Продолжить нажато, команда ещё в пути: пришедшее «на паузе» — устаревшее, звук не гасим. */
+  private holdPauseUntil = -Infinity
   private readonly deckUnsubs: (() => void)[] = []
 
   constructor(deps: SyncEngineDeps) {
@@ -180,6 +185,7 @@ export class SyncEngine {
       logger: deps.logger ?? silentLogger,
       wallNow: deps.wallNow ?? (() => deps.clock.now()),
       background: deps.background ?? (() => false),
+      startsLocally: deps.startsLocally ?? false,
     }
     this.controller = new DriftController(deps.profile ?? DESKTOP_PROFILE)
     ;[this.active, this.spare] = deps.decks
@@ -322,8 +328,9 @@ export class SyncEngine {
 
     switch (state.status) {
       case 'paused':
-        this.active.pause()
         this.spare.pause()
+        if (this.d.clock.now() < this.holdPauseUntil && !trackChanged) break
+        this.active.pause()
         if (state.trackId) void this.cuePaused(state)
         break
       case 'loading':
@@ -699,6 +706,15 @@ export class SyncEngine {
   /** Система остановила звук или загрузка зависла: продолжаем сами, без действий пользователя. */
   private recoverStoppedAudio(): void {
     const state = this.state
+    if (
+      state?.status === 'paused' &&
+      !this.active.paused &&
+      this.d.clock.now() >= this.holdPauseUntil
+    ) {
+      // Команда «продолжить» так и не дошла: сервер прав, комната на паузе.
+      this.active.pause()
+      return
+    }
     if (state?.status !== 'playing' || !this.audioUnlocked || this.trackUnavailable) return
     if (this.pausedLocally) return
     const now = this.d.clock.now()
@@ -743,10 +759,20 @@ export class SyncEngine {
   /** Вызывать прямо из обработчика кнопки: иначе система может запретить запуск. */
   playLocally(): void {
     this.pausedLocally = false
-    if (!this.d.background() || !this.state?.trackId || !this.audioUnlocked) return
-    this.active.play().catch((err: unknown) => {
-      this.d.logger.debug('local play rejected', { err: String(err) })
-    })
+    if (!this.d.startsLocally || !this.state?.trackId) return
+    this.holdPauseUntil = this.d.clock.now() + LOCAL_PLAY_HOLD_MS
+    this.active
+      .play()
+      .then(() => {
+        if (this.audioUnlocked) return
+        this.audioUnlocked = true
+        this.sendStatus()
+        this.emit()
+      })
+      .catch((err: unknown) => {
+        this.holdPauseUntil = -Infinity
+        this.d.logger.debug('local play rejected', { err: String(err) })
+      })
   }
 
   private updateSync(): void {

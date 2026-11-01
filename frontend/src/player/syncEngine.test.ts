@@ -60,6 +60,7 @@ function setup(
     wallNow?: (clock: FakeClock) => number
     background?: () => boolean
     profile?: DriftProfile
+    startsLocally?: boolean
   } = {},
 ) {
   const clock = new FakeClock()
@@ -82,7 +83,7 @@ function setup(
       }, 2 * ONE_WAY_MS)
     }
   }
-  const { wallNow, background, profile } = engineOpts
+  const { wallNow, background, profile, startsLocally } = engineOpts
   engine = new SyncEngine({
     clock,
     scheduler,
@@ -91,6 +92,7 @@ function setup(
     send,
     background,
     profile,
+    startsLocally,
     wallNow: wallNow && (() => wallNow(clock)),
   })
   engine.start()
@@ -550,6 +552,60 @@ describe('SyncEngine', () => {
       await env.scheduler.advance(500)
       expect(env.decks[0].playCalls.length).toBe(plays)
       expect(env.decks[0].seekCalls.length).toBe(seeks)
+    })
+  })
+
+  describe('lock screen play', () => {
+    const pausedRoom = async () => {
+      const env = setup({}, { startsLocally: true })
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'paused', positionMs: 5000 }), false)
+      await env.scheduler.advance(500)
+      return env
+    }
+
+    it('starts the audio at once, inside the button handler', async () => {
+      const env = await pausedRoom()
+      expect(env.decks[0].paused).toBe(true)
+      env.engine.playLocally()
+      expect(env.decks[0].paused).toBe(false)
+    })
+
+    it('a stale paused state does not silence it, a later playing state takes over', async () => {
+      const env = await pausedRoom()
+      env.engine.playLocally()
+      env.engine.applyState(ps({ version: 2, status: 'paused', positionMs: 5000 }), false)
+      await env.scheduler.advance(500)
+      expect(env.decks[0].paused).toBe(false)
+      env.engine.applyState(
+        ps({
+          version: 3,
+          status: 'playing',
+          positionMs: 5000,
+          anchorServerMs: env.serverNow() + 200,
+        }),
+        false,
+      )
+      await env.scheduler.advance(1000)
+      expect(env.decks[0].paused).toBe(false)
+    })
+
+    it('pauses again if the command never reached the server', async () => {
+      const env = await pausedRoom()
+      env.engine.playLocally()
+      await env.scheduler.advance(6000)
+      expect(env.decks[0].paused).toBe(true)
+    })
+
+    it('does nothing on platforms that do not need it', async () => {
+      const env = setup()
+      await env.engine.unlock()
+      await calibrated(env)
+      env.engine.applyState(ps({ status: 'paused' }), false)
+      await env.scheduler.advance(500)
+      env.engine.playLocally()
+      expect(env.decks[0].paused).toBe(true)
     })
   })
 

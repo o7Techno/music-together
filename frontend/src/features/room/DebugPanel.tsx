@@ -32,6 +32,7 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
   }, [session])
 
   const rows: [string, string][] = [
+    ['Сборка', __BUILD_ID__],
     ['Offset часов', fmt(info.offsetMs)],
     ['RTT (лучший)', fmt(info.rttMs)],
     ['Замеров часов', String(info.clockSamples)],
