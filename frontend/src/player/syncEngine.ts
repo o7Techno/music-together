@@ -6,6 +6,7 @@
 
 import type {
   ClientMessage,
+  MemberView,
   PlaybackState,
   QueueState,
   ServerMessage,
@@ -54,8 +55,6 @@ const STALL_RELOAD_MS = 10_000
 const LOCAL_PLAY_HOLD_MS = 5000
 /** После возврата из фона первые замеры часов неточны: столько времени звук не трогаем. */
 export const RESUME_SETTLE_MS = 2500
-/** Расхождение, накопленное в фоне, выправляем одной перемоткой, а не долгой подстройкой темпа. */
-export const RESUME_SEEK_MS = 150
 
 export interface SyncEngineDeps {
   clock: Clock
@@ -164,6 +163,7 @@ export class SyncEngine {
   private lastResumeAt = -Infinity
   private stoppedSince: number | null = null
   private correctionSeeks = 0
+  private connectionCount = Infinity
   private wasInBackground = false
   private settleUntil = -Infinity
   private resumeCheckPending = false
@@ -240,7 +240,11 @@ export class SyncEngine {
         this.clockSync.addSample(msg.t0, msg.serverTime, this.d.clock.now())
         if (this.clockSync.calibrated) this.flushCalibrationWaiters()
         break
+      case 'members':
+        this.noteMembers(msg.members)
+        break
       case 'snapshot':
+        this.noteMembers(msg.members)
         if (!this.clockSync.calibrated) {
           // Грубый приор до первых пингов: ошибка ≈ половина RTT.
           this.clockSync.addSample(this.d.clock.now(), msg.serverTime, this.d.clock.now())
@@ -264,6 +268,16 @@ export class SyncEngine {
       default:
         break
     }
+  }
+
+  private noteMembers(members: MemberView[]): void {
+    // Считаем соединения: два устройства одного аккаунта тоже должны звучать вместе.
+    this.connectionCount = members.reduce((sum, member) => sum + member.connections, 0)
+  }
+
+  /** Один в комнате и без подстройки темпом: сверяться не с кем, а перемотка слышна как запинка. */
+  private get relaxedAlone(): boolean {
+    return this.connectionCount <= 1 && this.controller.profile.maxRateDelta <= 0
   }
 
   private isPlayingExactly(state: PlaybackState): boolean {
@@ -640,12 +654,13 @@ export class SyncEngine {
       if (Math.abs(this.active.playbackRate - 1) > 0.0005) this.active.playbackRate = 1
     } else if (this.resumeCheckPending && !this.d.background()) {
       this.resumeCheckPending = false
-      if (Math.abs(m.drift) >= RESUME_SEEK_MS) {
+      const limit = this.relaxedAlone ? BACKGROUND_HARD_SEEK_MS : this.controller.profile.hardSeekMs
+      if (Math.abs(m.drift) >= limit) {
         this.correctionSeeks += 1
         this.active.seek(m.expected + this.controller.seekLatencyMs)
         this.controller.noteSeek(now)
       }
-    } else if (this.d.background()) {
+    } else if (this.d.background() || this.relaxedAlone) {
       this.correctInBackground(m, now)
     } else if (state && state.durationMs - m.expected > 300) {
       const action = this.controller.update(m.drift, m.expected, now)
@@ -786,7 +801,11 @@ export class SyncEngine {
       const drift = this.controller.smoothedDriftMs ?? this.lastDriftMs
       // Без подстройки темпом догонять нечем: до порога перемотки это и есть синхрон.
       const { maxRateDelta, hardSeekMs } = this.controller.profile
-      const limit = maxRateDelta > 0 ? IN_SYNC_THRESHOLD_MS : hardSeekMs
+      const limit = this.relaxedAlone
+        ? BACKGROUND_HARD_SEEK_MS
+        : maxRateDelta > 0
+          ? IN_SYNC_THRESHOLD_MS
+          : hardSeekMs
       next = drift !== null && Math.abs(drift) <= limit ? 'in_sync' : 'catching_up'
     }
     if (next !== this.sync) {
