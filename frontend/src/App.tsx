@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { HomePage } from '@/features/auth/HomePage'
 import { FullScreenSpinner } from '@/shared/ui/Spinner'
 import { Toaster } from '@/shared/ui/Toaster'
+import { UpdateBanner } from '@/shared/ui/UpdateBanner'
 
 const RoomPage = lazy(() => import('@/features/room/RoomPage'))
 
@@ -26,6 +27,7 @@ export function App() {
           </Routes>
         </Suspense>
         <Toaster />
+        <UpdateBanner />
       </BrowserRouter>
     </QueryClientProvider>
   )

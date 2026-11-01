@@ -104,4 +104,28 @@ describe('RoomSocket', () => {
     expect(s.send({ type: 'ping', t0: 1 })).toBe(true)
     expect(sockets[0]!.sent).toHaveLength(1)
   })
+
+  it('reconnectFresh replaces a silent socket at once and ignores its late close', () => {
+    const { e, sockets, timers } = env()
+    const statuses: string[] = []
+    const socket = new RoomSocket(
+      'ws://x',
+      {
+        ...noop,
+        onStatus: (status) => {
+          statuses.push(status)
+        },
+      },
+      e,
+    )
+    socket.connect()
+    sockets[0]?.open()
+    const silent = sockets[0]
+    socket.reconnectFresh()
+    expect(sockets).toHaveLength(2)
+    expect(statuses.at(-1)).toBe('reconnecting')
+    silent?.onclose?.({ code: 1006 })
+    expect(timers).toHaveLength(0)
+    expect(sockets).toHaveLength(2)
+  })
 })

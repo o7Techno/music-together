@@ -126,6 +126,22 @@ export class RoomSocket {
     this.open()
   }
 
+  /** Соединение выглядит живым, но не отвечает (страница спала): заменить новым, не дожидаясь close. */
+  reconnectFresh(): void {
+    if (this.stopped) return
+    const old = this.ws
+    if (old) {
+      old.onclose = null
+      old.onmessage = null
+      old.close()
+    }
+    this.ws = null
+    if (this.retryTimer !== null) this.env.clearTimeout(this.retryTimer)
+    this.retryTimer = null
+    this.attempt = Math.max(this.attempt, 1)
+    this.open()
+  }
+
   /** Принудительно разорвать (например, вкладка заметила, что связь мертва). */
   drop(): void {
     this.ws?.close()

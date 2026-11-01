@@ -150,3 +150,13 @@ test('room reports the audio as unlocked without a dedicated button', async ({ b
     .toBe(true)
   await expect(page.getByTestId('unlock')).toBeHidden()
 })
+
+test('an open page offers to update after a new deploy', async ({ page }) => {
+  await page.route('**/build.json', (route) => route.fulfill({ json: { id: 'newer-build' } }))
+  await page.goto('/')
+  await expect(page.getByTestId('update-banner')).toContainText('Вышла новая версия')
+  await page.unroute('**/build.json')
+  await page.getByRole('button', { name: 'Обновить' }).click()
+  await page.waitForLoadState('load')
+  await expect(page.getByTestId('update-banner')).toBeHidden()
+})

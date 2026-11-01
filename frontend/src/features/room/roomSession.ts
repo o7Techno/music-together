@@ -15,6 +15,7 @@ import { applyServerMessage, resetRoomStore, useRoomStore } from './roomStore'
 const COMMAND_TIMEOUT_MS = 10_000
 const CONNECTION_CHECK_MS = 15_000
 const SILENCE_MS = 70_000
+const MEDIA_ACK_MS = 1500
 // Активация жестом: на iOS считаются touchend и click, но не touchstart и pointerdown.
 const GESTURE_EVENTS = ['click', 'touchend', 'pointerup', 'keydown'] as const
 
@@ -69,6 +70,7 @@ export class RoomSession {
   private disposed = false
   private lastMessageAt = Date.now()
   private pendingMediaCommand: (() => CommandInput) | null = null
+  private mediaAckTimer = 0
   private readonly cleanups: (() => void)[] = []
   private errorListeners = new Set<(err: CommandError) => void>()
 
@@ -79,6 +81,7 @@ export class RoomSession {
     const ios = isIOS(navigator)
     this.engine = new SyncEngine({
       wallNow: () => Date.now(),
+      startsLocally: ios,
       background: () => ios && document.visibilityState === 'hidden',
       clock: browserClock,
       scheduler: new BrowserScheduler(),
@@ -196,12 +199,25 @@ export class RoomSession {
 
   /** Команда с экрана блокировки: соединение могло умереть, а тост там никто не увидит. */
   mediaCommand(build: () => CommandInput): void {
-    if (useRoomStore.getState().status === 'open') {
-      this.command(build()).catch(() => undefined)
+    this.pendingMediaCommand = build
+    window.clearTimeout(this.mediaAckTimer)
+    if (useRoomStore.getState().status !== 'open') {
+      this.socket.reconnectNow()
       return
     }
-    this.pendingMediaCommand = build
-    this.socket.reconnectNow()
+    this.sendMediaCommand(build)
+    // Страница могла спать, и соединение только выглядит живым: нет ответа — ставим новое.
+    this.mediaAckTimer = window.setTimeout(() => {
+      if (this.pendingMediaCommand === build) this.socket.reconnectFresh()
+    }, MEDIA_ACK_MS)
+  }
+
+  private sendMediaCommand(build: () => CommandInput): void {
+    this.command(build())
+      .then(() => {
+        if (this.pendingMediaCommand === build) this.pendingMediaCommand = null
+      })
+      .catch(() => undefined)
   }
 
   private onMessage(msg: ServerMessage): void {
@@ -211,6 +227,7 @@ export class RoomSession {
     if (msg.type === 'snapshot' && this.pendingMediaCommand) {
       const build = this.pendingMediaCommand
       this.pendingMediaCommand = null
+      window.clearTimeout(this.mediaAckTimer)
       this.command(build()).catch(() => undefined)
     }
     if (msg.type === 'ack') {
