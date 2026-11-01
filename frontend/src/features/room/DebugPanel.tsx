@@ -43,6 +43,7 @@ export function DebugPanel({ onClose }: { onClose: () => void }) {
     ['Задержка вывода', fmt(info.outputLatencyMs)],
     ['Задержка старта', fmt(info.startLatencyMs)],
     ['Задержка seek', fmt(info.seekLatencyMs)],
+    ['Перемоток для синхрона', String(info.correctionSeeks)],
     ['Неудачных seek', `${String(info.seekFailures)}${info.unstable ? ' (нестабилен)' : ''}`],
     ['Синхрон', info.sync],
     ['Комната: медиана', fmt(stats.medianMs)],
